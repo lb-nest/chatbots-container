@@ -1,0 +1,91 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>app</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@48,400,0,0"
+    />
+  </head>
+  <body>
+    <style>
+      body {
+        margin: 0;
+        color: #c7ccd8;
+        background-color: #1d1f2b;
+      }
+
+      textarea {
+        display: flex;
+        color: #c7ccd8;
+        background-color: #1d1f2b;
+        padding: 0.625rem 1.25rem;
+        font-family: monospace;
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.5;
+        border: none;
+        outline: none;
+        resize: none;
+      }
+
+      button {
+        display: inline-flex;
+        color: #c7ccd8;
+        background-color: #262838;
+        padding: 0.625rem 1.25rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.5;
+        border: none;
+        outline: none;
+        border-radius: 0.15rem;
+        cursor: pointer;
+      }
+    </style>
+    <div style="display: flex; width: 100vw; height: 100vh; overflow: hidden">
+      <form style="display: flex; width: 500px; height: 100%">
+        <textarea style="flex-grow: 1" name="text" placeholder="Type message here..."></textarea>
+        <div style="display: flex; align-items: center">
+          <button type="submit">
+            <span class="material-symbols-outlined">send</span>
+          </button>
+        </div>
+      </form>
+      <div
+        style="flex-grow: 1; font-family: monospace; overflow: auto; padding: 0.625rem 1.25rem"
+        console
+      ></div>
+    </div>
+    <script>
+      const logger = {
+        log(data) {
+          const el = document.createElement('p');
+          el.textContent = new Date()
+            .toISOString()
+            .concat(': ', typeof data === 'object' ? JSON.stringify(data) : data);
+
+          document.querySelector('div[console]').append(el);
+        },
+      };
+    </script>
+    <script type="module">
+      let ws = new WebSocket(location.origin.replace('http', 'ws'));
+
+      ws.onclose = () => {
+        ws = new WebSocket(location.origin.replace('http', 'ws'));
+      };
+
+      ws.onmessage = (event) => {
+        logger.log(event.data);
+      };
+
+      document.querySelector('form').onsubmit = (e) => {
+        e.preventDefault();
+        ws.send(e.target.text.value);
+      };
+    </script>
+  </body>
+</html>

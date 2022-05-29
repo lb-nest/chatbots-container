@@ -1,8 +1,7 @@
 import 'reflect-metadata';
 import fastifyCors from '@fastify/cors';
 import { plainToClass } from 'class-transformer';
-import { validate } from 'class-validator';
-import dotenv from 'dotenv';
+import { validateSync } from 'class-validator';
 import fastify from 'fastify';
 import { JwtPayload, verify } from 'jsonwebtoken';
 import { ValidatorError } from './errors/validator.error';
@@ -10,8 +9,6 @@ import { ProcessManager } from './process';
 import * as start from './schema/start.schema';
 import * as stop from './schema/stop.schema';
 import { Schema } from './types';
-
-dotenv.config();
 
 const app = fastify({ logger: true });
 const manager = new ProcessManager();
@@ -25,10 +22,10 @@ app.route({
   url: '/start',
   schema: start.schema,
   handler: async (req, reply) => {
-    const jwt = <JwtPayload>verify(String(req.headers.token), 'jwt');
+    const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
 
     const schema = plainToClass(Schema, req.body);
-    const errors = await validate(schema);
+    const errors = await validateSync(schema);
 
     if (errors.length) {
       throw new ValidatorError();

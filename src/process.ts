@@ -9,9 +9,15 @@ export class ProcessManager {
     this.process[id] = spawn('deno', ['run', '--allow-env', '--allow-net', path.resolve(entry)], {
       env,
     });
+
+    this.process[id].on('error', () => {
+      this.stop(id);
+    });
   }
 
   stop(id: string): void {
-    this.process[id]?.kill('SIGTERM');
+    if (this.process[id]?.kill('SIGTERM')) {
+      delete this.process[id];
+    }
   }
 }

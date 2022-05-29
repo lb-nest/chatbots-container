@@ -47,18 +47,33 @@ export class Start extends NodeBase<NodeType.Start> {
   next?: number;
 }
 
+export enum AttachmentType {
+  Audio = 'Audio',
+  Document = 'Document',
+  Image = 'Image',
+  Video = 'Video',
+}
+
+export class Attachment {
+  @IsEnum(AttachmentType)
+  type: AttachmentType;
+
+  @IsUrl()
+  url: string;
+
+  @IsOptional()
+  @IsString()
+  name?: string;
+}
+
 export class SendMessage extends NodeBase<NodeType.SendMessage> {
   @IsString()
   text: string;
 
-  @Type(() => Object)
+  @Type(() => Attachment)
   @IsArray()
-  @ValidateNested()
-  attachments: Array<{
-    type: 'Audio' | 'Document' | 'Image' | 'Video';
-    url: string;
-    name?: string;
-  }>;
+  @ValidateNested({ each: true })
+  attachments: Attachment[];
 
   @IsInt()
   next?: number;
@@ -110,7 +125,7 @@ export class Buttons extends NodeBase<NodeType.Buttons> {
 
   @Type(() => Button)
   @IsArray()
-  @ValidateNested()
+  @ValidateNested({ each: true })
   buttons: Button[];
 }
 
@@ -145,7 +160,7 @@ export class BranchItem {
 
   @Type(() => Condition)
   @IsArray()
-  @ValidateNested()
+  @ValidateNested({ each: true })
   conditions: Condition[];
 
   @IsOptional()
@@ -156,8 +171,12 @@ export class BranchItem {
 export class Branch extends NodeBase<NodeType.Branch> {
   @Type(() => BranchItem)
   @IsArray()
-  @ValidateNested()
+  @ValidateNested({ each: true })
   branches: BranchItem[];
+
+  @IsOptional()
+  @IsInt()
+  default?: number;
 }
 
 export class Request {
@@ -189,7 +208,7 @@ export class ServiceCall extends NodeBase<NodeType.ServiceCall> {
 export class Transfer extends NodeBase<NodeType.Transfer> {
   @IsInt()
   @ValidateIf((object, value) => value !== null)
-  assignTo: number | null;
+  assignedTo: number | null;
 
   @IsOptional()
   @IsInt()

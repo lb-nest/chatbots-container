@@ -15,7 +15,7 @@ import {
 } from './node';
 import { Variable } from './variable';
 
-export class Flow {
+export class Schema {
   @Type(() => NodeBase, {
     discriminator: {
       property: 'type',
@@ -32,10 +32,10 @@ export class Flow {
     },
     keepDiscriminatorProperty: true,
   })
-  @ValidateNested()
+  @ValidateNested({ each: true })
   nodes: Node[];
 
   @Type(() => Variable)
-  @ValidateNested()
+  @ValidateNested({ each: true })
   variables: Variable[];
 }

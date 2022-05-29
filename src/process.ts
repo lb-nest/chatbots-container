@@ -2,31 +2,16 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import path from 'path';
 
 export class ProcessManager {
-  private static readonly processes: Record<number, ProcessManager> = {};
+  private process: Record<string, ChildProcessWithoutNullStreams> = {};
 
-  private process: ChildProcessWithoutNullStreams;
-
-  static get(id: number) {
-    return this.processes[id];
+  start(id: string, entry: string, env: Record<string, any>): void {
+    this.stop(id);
+    this.process[id] = spawn('deno', ['run', '--allow-env', '--allow-net', path.resolve(entry)], {
+      env,
+    });
   }
 
-  async start() {
-    this.process = spawn(
-      'deno',
-      ['run', '--allow-env', '--allow-net', path.resolve('runtime/index.ts')],
-      {
-        env: {
-          WEBSOCKET_EDGE_URL: 'ws://localhost:1337',
-        },
-      },
-    );
-
-    ProcessManager.processes[this.process.pid] = this;
-    return this.process.pid;
-  }
-
-  async stop() {
-    this.process.kill('SIGTERM');
-    return 'ok';
+  stop(id: string): void {
+    this.process[id]?.kill('SIGTERM');
   }
 }

@@ -1,81 +1,59 @@
 import 'reflect-metadata';
-import fastifyStatic from '@fastify/static';
-import fastifyWebsocket from '@fastify/websocket';
+import fastifyCors from '@fastify/cors';
+import { plainToClass } from 'class-transformer';
+import { validate } from 'class-validator';
+import dotenv from 'dotenv';
 import fastify from 'fastify';
-import path from 'path';
-import { websocketHandler } from './websocket';
+import { JwtPayload, verify } from 'jsonwebtoken';
+import { ValidatorError } from './errors/validator.error';
+import { ProcessManager } from './process';
+import * as start from './schema/start.schema';
+import * as stop from './schema/stop.schema';
+import { Schema } from './types';
+
+dotenv.config();
 
 const app = fastify({ logger: true });
+const manager = new ProcessManager();
 
-app.register(fastifyWebsocket);
-app.register(fastifyStatic, {
-  root: path.resolve('public'),
+app.register(fastifyCors, {
+  origin: '*',
 });
 
 app.route({
   method: 'POST',
-  schema: {
-    querystring: {
-      type: 'object',
-      properties: {
-        token: {
-          type: 'string',
-        },
-      },
-      required: ['token'],
-    },
-    body: {
-      type: 'object',
-      properties: {
-        url: {
-          type: 'string',
-        },
-        schema: {
-          type: 'string',
-        },
-      },
-      required: ['url', 'source'],
-    },
-    response: {
-      201: {
-        pid: {
-          type: 'number',
-        },
-      },
-    },
-  },
   url: '/start',
+  schema: start.schema,
   handler: async (req, reply) => {
-    // TODO: start chatbot process
+    const jwt = <JwtPayload>verify(String(req.headers.token), 'jwt');
 
-    reply.code(201).send({ pid: 0 });
+    const schema = plainToClass(Schema, req.body);
+    const errors = await validate(schema);
+
+    if (errors.length) {
+      throw new ValidatorError();
+    }
+
+    manager.start(jwt.sub, 'runtime/index.ts', {
+      schema,
+      url: jwt.aud,
+      token: req.headers.token,
+    });
+
+    reply.code(204);
   },
 });
 
 app.route({
   method: 'POST',
   url: '/stop',
-  schema: {
-    querystring: {
-      type: 'object',
-      properties: {
-        token: {
-          type: 'string',
-        },
-      },
-      required: ['token'],
-    },
-    response: {
-      204: {},
-    },
-  },
+  schema: stop.schema,
   handler: async (req, reply) => {
-    // TODO: stop chatbot process
+    const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
+    manager.stop(jwt.sub);
 
     reply.code(204);
   },
 });
 
-app.get('/', { websocket: true }, websocketHandler);
-
-app.listen(1337);
+app.listen(Number(process.env.PORT));

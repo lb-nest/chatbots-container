@@ -14,5 +14,6 @@ export class Variable {
   @IsString()
   name: string;
 
+  // TODO: conditional validation
   value?: any;
 }

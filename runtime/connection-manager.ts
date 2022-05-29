@@ -1,25 +1,21 @@
 import EventEmitter from 'https://deno.land/x/events/mod.ts';
-import { ConfigByEnvironmemt } from './config';
 
 export class ConnectionManager extends EventEmitter {
-  constructor(private ws: WebSocket, private config: ConfigByEnvironmemt) {
+  private ws: WebSocket;
+
+  constructor(url: string, private token: string) {
     super();
+    this.ws = new WebSocket(url);
     this.ws.onmessage = this.handleMessage.bind(this);
   }
 
-  async start() {
-    return new Promise<void>((resolve) => {
-      this.ws.onopen = () => {
-        this.ws.send(
-          JSON.stringify({
-            type: 'init',
-            payload: this.config.get('TOKEN'),
-          }),
-        );
-
-        resolve();
-      };
-    });
+  start() {
+    this.ws.onopen = () => {
+      this.send({
+        type: 'init',
+        payload: this.token,
+      });
+    };
   }
 
   send(data: Record<string, any>) {

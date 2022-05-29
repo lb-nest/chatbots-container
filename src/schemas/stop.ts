@@ -1,4 +1,4 @@
-export const request = {
+const request = {
   tags: ['chatbots'],
   summary: 'Stop the chatbot process',
   headers: {
@@ -12,9 +12,9 @@ export const request = {
   },
 };
 
-export const response = {};
+const response = {};
 
-export const schema = {
+export const stop = {
   ...request,
   response: {
     204: response,

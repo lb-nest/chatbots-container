@@ -10,21 +10,14 @@ export class ProcessManager {
       env,
     });
 
-    this.process[id].stdout.on('data', (data) => {
-      console.log('data', data.toString());
-    });
-
-    this.process[id].stderr.on('data', (data) => {
-      console.log('error', data.toString());
-    });
-
-    this.process[id].on('error', () => {
+    this.process[id].on('close', () => {
       this.stop(id);
     });
   }
 
   stop(id: string): void {
     if (this.process[id]?.kill('SIGTERM')) {
+      this.process[id]?.removeAllListeners();
       delete this.process[id];
     }
   }

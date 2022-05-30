@@ -10,6 +10,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { Attachment, Button } from './message';
 
 export enum NodeType {
   Start = 'Start',
@@ -19,18 +20,16 @@ export enum NodeType {
   Branch = 'Branch',
   ServiceCall = 'ServiceCall',
   Transfer = 'Transfer',
+  AssignTag = 'AssignTag',
   Close = 'Close',
 }
 
 export class NodeBase<T extends NodeType> {
-  @IsInt()
-  id: number;
+  @IsString()
+  id: string;
 
   @IsEnum(NodeType)
   type: T;
-
-  @IsString()
-  name: string;
 }
 
 export enum TriggerType {
@@ -43,40 +42,20 @@ export class Start extends NodeBase<NodeType.Start> {
   trigger: TriggerType;
 
   @IsOptional()
-  @IsInt()
-  next?: number;
-}
-
-export enum AttachmentType {
-  Audio = 'Audio',
-  Document = 'Document',
-  Image = 'Image',
-  Video = 'Video',
-}
-
-export class Attachment {
-  @IsEnum(AttachmentType)
-  type: AttachmentType;
-
-  @IsUrl()
-  url: string;
-
-  @IsOptional()
   @IsString()
-  name?: string;
+  next?: string;
 }
-
 export class SendMessage extends NodeBase<NodeType.SendMessage> {
   @IsString()
   text: string;
 
   @Type(() => Attachment)
-  @IsArray()
   @ValidateNested({ each: true })
   attachments: Attachment[];
 
-  @IsInt()
-  next?: number;
+  @IsOptional()
+  @IsString()
+  next?: string;
 }
 
 export enum ValidationType {
@@ -92,31 +71,15 @@ export class CollectInput extends NodeBase<NodeType.CollectInput> {
   @IsString()
   text: string;
 
-  @IsInt()
-  variable: number;
+  @IsString()
+  variable: string;
 
   @IsEnum(ValidationType)
   validation: ValidationType;
 
   @IsOptional()
-  @IsInt()
-  next?: number;
-}
-
-export enum ButtonType {
-  QuickReply = 'QuickReply',
-}
-
-export class Button {
-  @IsEnum(ButtonType)
-  type: ButtonType;
-
   @IsString()
-  text: string;
-
-  @IsOptional()
-  @IsInt()
-  next?: number;
+  next?: string;
 }
 
 export class Buttons extends NodeBase<NodeType.Buttons> {
@@ -124,7 +87,6 @@ export class Buttons extends NodeBase<NodeType.Buttons> {
   text: string;
 
   @Type(() => Button)
-  @IsArray()
   @ValidateNested({ each: true })
   buttons: Button[];
 }
@@ -139,14 +101,14 @@ export enum OperatorType {
 }
 
 export class Condition {
-  @IsInt()
-  variable1: number;
+  @IsString()
+  variable1: string;
 
   @IsEnum(OperatorType)
   operator: OperatorType;
 
-  @IsInt()
-  variable2: number;
+  @IsString()
+  variable2: string;
 }
 
 export enum ComparsionType {
@@ -164,19 +126,18 @@ export class BranchItem {
   conditions: Condition[];
 
   @IsOptional()
-  @IsInt()
-  next?: number;
+  @IsString()
+  next?: string;
 }
 
 export class Branch extends NodeBase<NodeType.Branch> {
   @Type(() => BranchItem)
-  @IsArray()
   @ValidateNested({ each: true })
   branches: BranchItem[];
 
   @IsOptional()
-  @IsInt()
-  default?: number;
+  @IsString()
+  default?: string;
 }
 
 export class Request {
@@ -197,12 +158,12 @@ export class ServiceCall extends NodeBase<NodeType.ServiceCall> {
   response: Record<number, any>;
 
   @IsOptional()
-  @IsInt()
-  next?: number;
+  @IsString()
+  next?: string;
 
   @IsOptional()
-  @IsInt()
-  error?: number;
+  @IsString()
+  error?: string;
 }
 
 export class Transfer extends NodeBase<NodeType.Transfer> {
@@ -211,14 +172,23 @@ export class Transfer extends NodeBase<NodeType.Transfer> {
   assignedTo: number | null;
 
   @IsOptional()
+  @IsString()
+  next?: string;
+}
+
+export class AssignTag extends NodeBase<NodeType.AssignTag> {
   @IsInt()
-  next?: number;
+  tag: number;
+
+  @IsOptional()
+  @IsString()
+  next?: string;
 }
 
 export class Close extends NodeBase<NodeType.Close> {
   @IsOptional()
-  @IsInt()
-  next?: number;
+  @IsString()
+  next?: string;
 }
 
 export type Node =

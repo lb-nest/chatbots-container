@@ -1,12 +1,12 @@
-import { IsEnum, IsInt, IsString } from 'class-validator';
+import { IsEnum, IsString } from 'class-validator';
 
 export enum VariableType {
   Auto = 'Auto',
 }
 
 export class Variable {
-  @IsInt()
-  id: number;
+  @IsString()
+  id: string;
 
   @IsEnum(VariableType)
   type: VariableType;

@@ -1,5 +1,4 @@
 import 'reflect-metadata';
-import fastifyWebsocket from '@fastify/websocket';
 import { plainToClass } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { config } from 'dotenv';
@@ -13,8 +12,6 @@ config();
 
 const app = fastify({ logger: true });
 const manager = new ProcessManager();
-
-app.register(fastifyWebsocket);
 
 app.post('/start', {
   schema: start,
@@ -31,12 +28,12 @@ app.post('/start', {
       throw error;
     }
 
-    manager.start(jwt.sub, 'runtime/main.ts', {
+    manager.start(jwt.id, 'runtime/main.ts', {
       schema: JSON.stringify({
-        nodes: schema.nodes.reduce((s, n) => Object.assign(s, { [n.id]: n })),
-        variables: schema.variables,
+        ...schema,
+        nodes: schema.nodes.reduce((s, n) => Object.assign(s, { [n.id]: n }), {}),
       }),
-      url: jwt.aud,
+      ws: jwt.ws,
       token: req.headers.token,
     });
 
@@ -48,16 +45,10 @@ app.post('/stop', {
   schema: stop,
   handler: async (req, reply) => {
     const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
-    manager.stop(jwt.sub);
+    manager.stop(jwt.id);
 
     reply.code(204).send();
   },
-});
-
-app.get('/', { websocket: true }, (connection) => {
-  connection.socket.on('message', (data) => {
-    console.log(data.toString());
-  });
 });
 
 app.listen(Number(process.env.PORT));

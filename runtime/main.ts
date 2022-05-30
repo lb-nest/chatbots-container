@@ -1,6 +1,4 @@
-import { ConfigByEnvironment } from './config.ts';
-import { ConnectionManager } from './connection-manager.ts';
-import { EventTypes } from './types.ts';
+import io from 'https://cdn.socket.io/4.4.1/socket.io.esm.min.js';
 
 interface Session {
   chat: Record<string, any>;
@@ -8,86 +6,37 @@ interface Session {
   variables: Record<string, any>;
 }
 
+class ConfigByEnvironment {
+  [key: string]: any;
+
+  constructor() {
+    Object.assign(this, Deno.env.toObject());
+  }
+}
+
 class Chatbot {
-  private manager: ConnectionManager;
   private session: Record<number, Session> = {};
+  private io: any;
+
   constructor(private config: ConfigByEnvironment) {
-    this.manager = new ConnectionManager(config.url, config.token);
-    this.manager.on(EventTypes.IncomingChats, this.handleChat.bind(this));
+    this.io = io(config.ws, {
+      transports: ['websocket'],
+      auth: {
+        token: config.token,
+      },
+    });
+
+    this.io.on('connect_error', (data: any) => {
+      console.log('reconnect', data);
+    });
+    this.io.on('error', console.log);
+    this.io.on('event', console.log);
+
+    this.io.emit('event', 'data');
   }
 
-  start() {
-    this.manager.start();
-  }
-
-  private handleChat(chat: Record<string, any>) {
-    if (!this.session[chat.id]) {
-      const { nodes, variables } = this.config.schema;
-      this.session[chat.id] = {
-        chat,
-        node: nodes[0],
-        variables,
-      };
-    }
-
-    const session = this.session[chat.id];
-    switch (session.node?.type) {
-      case 'Start':
-        // TODO: проверить условие
-        // либо isFlow == true && assignedTo == chatbotId
-        // либо isNew == true
-        // если ни одно из условий не подошло, игнорировать контакт
-        // TODO: переместиться на следующую ноду
-        break;
-
-      case 'SendMessage':
-        // TODO: отправить сообщение
-        // TODO: переместиться на следующую ноду
-        break;
-
-      case 'CollectInput':
-        // TODO: отправить контакту сообщение и кнопки
-        // TODO: пометить сессию как ожидающую ввода от контакта
-        // TODO: записать полученное от контакта сообщение в переменную
-        // TODO: переместиться на следующую ноду
-        break;
-
-      case 'Buttons':
-        // TODO: отправить контакту сообщение и кнопки
-        // TODO: пометить сессию как ожидающую ввода от контакта
-        // TODO: основываясь на нажатой контактом кнопке
-        // переместиться на следующую ноду
-        break;
-
-      case 'Branch':
-        // TODO: выполнить условия
-        // TODO: переместиться на следующую ноду
-        break;
-
-      case 'ServiceCall':
-        // TODO: сделать вызов стороннего api
-        // TODO: переместиться на следующую ноду
-        break;
-
-      case 'Close':
-        // TODO: закрыть контакт
-        // TODO: переместиться на следующую ноду
-        break;
-
-      case 'Transfer':
-        // TODO: переназначить контакт на пользователя/чатбота
-        // TODO: переместиться на следующую ноду
-        break;
-
-      case undefined:
-        // TODO: взаимодействие с ботом окончено
-        // удалить сессию контакта
-        break;
-
-      default:
-        // TODO: неподдерживаемая рантаймом нода?
-        break;
-    }
+  start(): void {
+    console.log('start');
   }
 }
 

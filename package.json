@@ -13,12 +13,10 @@
   "devDependencies": {
     "@types/jsonwebtoken": "^8.5.8",
     "@types/node": "^17.0.23",
-    "@types/ws": "^8.5.3",
     "rimraf": "^3.0.2",
     "tsc-watch": "^5.0.3"
   },
   "dependencies": {
-    "@fastify/websocket": "^5.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.13.2",
     "dotenv": "^16.0.1",

@@ -9,6 +9,11 @@ interface Session {
   variables: Record<string, any>;
 }
 
+interface Schema {
+  nodes: Array<Record<string, any>>;
+  variables: Array<Record<string, any>>;
+}
+
 class ConfigByEnvironment {
   [key: string]: any;
 
@@ -17,20 +22,18 @@ class ConfigByEnvironment {
   }
 }
 
-function getStartNode(nodes: any[]) {
-  return nodes.find((node) => node.type === 'Start');
-}
-
 class Chatbot {
+  private schema: Schema;
   private session: Record<number, Session> = {};
   private io: any;
 
   constructor(private config: ConfigByEnvironment) {
+    this.schema = JSON.parse(config.schema);
     this.io = io(config.ws, {
       transports: ['websocket'],
       auth: {
         token: config.token,
-        trigger: getStartNode(Object.values(config.schema.nodes))?.trigger,
+        trigger: this.getStartNode()?.trigger,
       },
     });
 
@@ -43,12 +46,16 @@ class Chatbot {
     if (!this.session[chat.id]) {
       this.session[chat.id] = {
         chat,
-        node: getStartNode(Object.values(this.config.schema.nodes)),
-        variables: this.config.schema.variables,
+        node: this.getStartNode(),
+        variables: this.schema.variables,
       };
     }
 
     const session = this.session[chat.id];
+  }
+
+  private getStartNode(): any {
+    return Object.values(this.schema.nodes).find((node: any) => node.type === 'Start');
   }
 }
 

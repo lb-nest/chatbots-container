@@ -175,35 +175,7 @@ interface Schema {
 }
 
 interface Chat {
-  id: number;
-  contact: {
-    id: number;
-    username: string;
-    name: string;
-    avatarUrl: string;
-    notes: string;
-    assignedTo?: {
-      id: number;
-      name: string;
-    };
-    priority: number;
-    resolved: boolean;
-    status: string;
-  };
-  messages: Array<{
-    id: number;
-    content: Array<{
-      text?: string;
-      attachments: Attachment[];
-      buttons?: Button[];
-    }>;
-    fromMe: boolean;
-    status: string;
-    createdAt: string;
-    updatedAt: string;
-  }>;
-  createdAt: string;
-  updatedAt: string;
+  [key: string]: any;
 }
 
 interface Session {

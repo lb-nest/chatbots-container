@@ -1,7 +1,7 @@
 import { IsEnum, IsString } from 'class-validator';
 
 export enum VariableType {
-  Auto = 'Auto',
+  String = 'String',
 }
 
 export class Variable {

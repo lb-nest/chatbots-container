@@ -51,6 +51,7 @@ export class SendMessage extends NodeBase<NodeType.SendMessage> {
 
   @Type(() => Attachment)
   @ValidateNested({ each: true })
+  @IsArray()
   attachments: Attachment[];
 
   @IsOptional()
@@ -88,6 +89,7 @@ export class Buttons extends NodeBase<NodeType.Buttons> {
 
   @Type(() => Button)
   @ValidateNested({ each: true })
+  @IsArray()
   buttons: Button[];
 }
 
@@ -121,8 +123,8 @@ export class BranchItem {
   type: ComparsionType;
 
   @Type(() => Condition)
-  @IsArray()
   @ValidateNested({ each: true })
+  @IsArray()
   conditions: Condition[];
 
   @IsOptional()
@@ -133,6 +135,7 @@ export class BranchItem {
 export class Branch extends NodeBase<NodeType.Branch> {
   @Type(() => BranchItem)
   @ValidateNested({ each: true })
+  @IsArray()
   branches: BranchItem[];
 
   @IsOptional()
@@ -152,6 +155,7 @@ export class Request {
 
 export class ServiceCall extends NodeBase<NodeType.ServiceCall> {
   @ValidateNested()
+  @IsObject()
   request: Request;
 
   @IsObject()
@@ -199,4 +203,5 @@ export type Node =
   | Branch
   | ServiceCall
   | Transfer
+  | AssignTag
   | Close;

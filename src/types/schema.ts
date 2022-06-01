@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ValidateNested } from 'class-validator';
+import { IsArray, ValidateNested } from 'class-validator';
 import {
   Branch,
   Buttons,
@@ -33,9 +33,11 @@ export class Schema {
     keepDiscriminatorProperty: true,
   })
   @ValidateNested({ each: true })
+  @IsArray()
   nodes: Node[];
 
   @Type(() => Variable)
   @ValidateNested({ each: true })
+  @IsArray()
   variables: Variable[];
 }

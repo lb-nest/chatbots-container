@@ -1,18 +1,9 @@
 // @ts-ignore
 import io from 'https://cdn.socket.io/4.4.1/socket.io.esm.min.js';
+// @ts-ignore
+import Queue from 'https://deno.land/x/queue/mod.ts';
 
 declare const Deno: Record<string, any>;
-
-interface Session {
-  chat: Record<string, any>;
-  node: Record<string, any>;
-  variables: Record<string, any>;
-}
-
-interface Schema {
-  nodes: Array<Record<string, any>>;
-  variables: Array<Record<string, any>>;
-}
 
 class ConfigByEnvironment {
   [key: string]: any;
@@ -22,10 +13,220 @@ class ConfigByEnvironment {
   }
 }
 
+export enum AttachmentType {
+  Audio = 'Audio',
+  Document = 'Document',
+  Image = 'Image',
+  Video = 'Video',
+}
+
+interface Attachment {
+  type: AttachmentType;
+  url: string;
+  name?: string;
+}
+
+enum ButtonType {
+  QuickReply = 'QuickReply',
+}
+
+interface Button {
+  type: ButtonType;
+  text: string;
+  next?: string;
+}
+
+enum NodeType {
+  Start = 'Start',
+  SendMessage = 'SendMessage',
+  CollectInput = 'CollectInput',
+  Buttons = 'Buttons',
+  Branch = 'Branch',
+  ServiceCall = 'ServiceCall',
+  Transfer = 'Transfer',
+  AssignTag = 'AssignTag',
+  Close = 'Close',
+}
+
+interface NodeBase<T extends NodeType> {
+  id: string;
+  type: T;
+}
+
+enum TriggerType {
+  NewChat = 'NewChat',
+  NewAssignment = 'NewAssignment',
+}
+
+interface Start extends NodeBase<NodeType.Start> {
+  trigger: TriggerType;
+  next?: string;
+}
+interface SendMessage extends NodeBase<NodeType.SendMessage> {
+  text: string;
+  attachments: Attachment[];
+  next?: string;
+}
+
+enum ValidationType {
+  String = 'String',
+  Number = 'Number',
+  Boolean = 'Boolean',
+  Email = 'Email',
+  Phone = 'Phone',
+  Regex = 'Regex',
+}
+
+interface CollectInput extends NodeBase<NodeType.CollectInput> {
+  text: string;
+  variable: string;
+  validation: ValidationType;
+  next?: string;
+}
+
+interface Buttons extends NodeBase<NodeType.Buttons> {
+  text: string;
+  buttons: Button[];
+}
+
+enum OperatorType {
+  Eq = 'Eq',
+  Neq = 'Neq',
+  Lt = 'Lt',
+  Lte = 'Lte',
+  Gt = 'Gt',
+  Gte = 'Gte',
+}
+
+interface Condition {
+  variable1: string;
+  operator: OperatorType;
+  variable2: string;
+}
+
+enum ComparsionType {
+  All = 'All',
+  Any = 'Any',
+}
+
+interface BranchItem {
+  type: ComparsionType;
+  conditions: Condition[];
+  next?: string;
+}
+
+interface Branch extends NodeBase<NodeType.Branch> {
+  branches: BranchItem[];
+  default?: string;
+}
+
+interface Request {
+  url: string;
+  headers: Record<string, string>;
+  body?: any;
+}
+
+interface ServiceCall extends NodeBase<NodeType.ServiceCall> {
+  request: Request;
+  response: Record<number, any>;
+  next?: string;
+  error?: string;
+}
+
+interface Transfer extends NodeBase<NodeType.Transfer> {
+  assignedTo: number | null;
+  next?: string;
+}
+
+interface AssignTag extends NodeBase<NodeType.AssignTag> {
+  tag: number;
+  next?: string;
+}
+
+interface Close extends NodeBase<NodeType.Close> {
+  next?: string;
+}
+
+type Node =
+  | Start
+  | SendMessage
+  | CollectInput
+  | Buttons
+  | Branch
+  | ServiceCall
+  | Transfer
+  | AssignTag
+  | Close;
+
+enum VariableType {
+  String = 'String',
+}
+
+interface Variable {
+  id: string;
+  type: VariableType;
+  name: string;
+  value?: any;
+}
+
+interface Schema {
+  nodes: Record<string, Node>;
+  variables: Variable[];
+}
+
+interface Chat {
+  id: number;
+  contact: {
+    id: number;
+    username: string;
+    name: string;
+    avatarUrl: string;
+    notes: string;
+    assignedTo?: {
+      id: number;
+      name: string;
+    };
+    priority: number;
+    resolved: boolean;
+    status: string;
+  };
+  messages: Array<{
+    id: number;
+    content: Array<{
+      text?: string;
+      attachments: Attachment[];
+      buttons?: Button[];
+    }>;
+    fromMe: boolean;
+    status: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Session {
+  chat: Chat;
+  node: Node;
+  variables: Record<string, Variable>;
+}
+
+export enum ChatbotEventType {
+  NewAssignment = 'NewAssignment',
+  IncomingMessage = 'IncomingMessage',
+  OutgoingMessage = 'OutgoingMessage',
+  SetTag = 'SetTag',
+  TransferContact = 'TransferContact',
+  CloseContact = 'CloseContact',
+}
+
 class Chatbot {
   private schema: Schema;
   private session: Record<number, Session> = {};
   private io: any;
+
+  private queue = new Queue();
 
   constructor(private config: ConfigByEnvironment) {
     this.schema = JSON.parse(config.schema);
@@ -37,22 +238,61 @@ class Chatbot {
       },
     });
 
-    this.io.on('chat', this.handleChat.bind(this));
+    this.io.on(ChatbotEventType.NewAssignment, this.handleNewAssignment.bind(this));
+    this.io.on(ChatbotEventType.IncomingMessage, this.handleIncomingMessage.bind(this));
   }
 
   start(): void {}
 
-  private handleChat(chat: Record<string, any>): void {
-    if (!this.session[chat.id]) {
-      this.session[chat.id] = {
-        chat,
-        node: this.getStartNode(),
-        variables: this.schema.variables,
-      };
-    }
+  private handleNewAssignment(chat: Chat): void {
+    this.queue.push(() => {
+      if (!this.session[chat.id]) {
+        this.session[chat.id] = {
+          chat,
+          node: this.getStartNode(),
+          variables: Object.fromEntries(
+            this.schema.variables.map((variable) => [variable.id, variable]),
+          ),
+        };
+      }
 
-    const session = this.session[chat.id];
+      const session = this.session[chat.id];
+
+      switch (session.node.type) {
+        case NodeType.Start:
+          session.node = this.schema.nodes[session.node.next as any];
+          break;
+
+        case NodeType.SendMessage:
+          console.log(1);
+
+          break;
+
+        case NodeType.CollectInput:
+          break;
+
+        case NodeType.Buttons:
+          break;
+
+        case NodeType.Branch:
+          break;
+
+        case NodeType.ServiceCall:
+          break;
+
+        case NodeType.Transfer:
+          break;
+
+        case NodeType.AssignTag:
+          break;
+
+        case NodeType.Close:
+          break;
+      }
+    });
   }
+
+  private handleIncomingMessage(): void {}
 
   private getStartNode(): any {
     return Object.values(this.schema.nodes).find((node: any) => node.type === 'Start');

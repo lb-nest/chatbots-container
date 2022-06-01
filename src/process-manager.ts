@@ -10,6 +10,14 @@ export class ProcessManager {
       env,
     });
 
+    this.process[id].stdout.on('data', (data) => {
+      console.log(data.toString());
+    });
+
+    this.process[id].stderr.on('data', (data) => {
+      console.log(data.toString());
+    });
+
     this.process[id].on('close', () => {
       this.stop(id);
     });

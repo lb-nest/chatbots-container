@@ -14,7 +14,7 @@ const request = {
 
 const response = {};
 
-export const stop = {
+export const off = {
   ...request,
   response: {
     204: response,

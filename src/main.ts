@@ -5,7 +5,7 @@ import { config } from 'dotenv';
 import fastify from 'fastify';
 import { JwtPayload, verify } from 'jsonwebtoken';
 import { ProcessManager } from './process-manager';
-import { start, stop } from './schemas';
+import { off, on } from './schemas';
 import { Schema } from './types';
 
 config();
@@ -13,8 +13,8 @@ config();
 const app = fastify({ logger: true });
 const manager = new ProcessManager();
 
-app.post('/start', {
-  schema: start,
+app.post('/on', {
+  schema: on,
   handler: async (req, reply) => {
     const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
 
@@ -41,8 +41,8 @@ app.post('/start', {
   },
 });
 
-app.post('/stop', {
-  schema: stop,
+app.post('/off', {
+  schema: off,
   handler: async (req, reply) => {
     const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
     manager.stop(jwt.id);

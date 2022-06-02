@@ -185,7 +185,7 @@ interface Session {
   wait?: boolean;
 }
 
-export enum ChatbotEventType {
+export enum EventType {
   NewEvent = 'NewEvent',
   Callback = 'Callback',
   SendMessage = 'SendMessage',
@@ -223,7 +223,7 @@ class Chatbot {
       },
     });
 
-    this.io.on(ChatbotEventType.NewEvent, this.handleNewEvent.bind(this));
+    this.io.on(EventType.NewEvent, this.handleNewEvent.bind(this));
   }
 
   start(): void {}
@@ -247,14 +247,14 @@ class Chatbot {
   }
 
   private handleStart(chat: Chat, node: Start): void {
-    this.io.emit(ChatbotEventType.Callback, {
+    this.io.emit(EventType.Callback, {
       chatId: chat.id,
     });
     this.session[chat.id].node = this.schema.nodes[node.next as any];
   }
 
   private handleSendMessage(chat: Chat, node: SendMessage): void {
-    this.io.emit(ChatbotEventType.SendMessage, {
+    this.io.emit(EventType.SendMessage, {
       chatId: chat.id,
       text: node.text,
       attachments: node.attachments,
@@ -266,7 +266,7 @@ class Chatbot {
     if (this.session[chat.id].wait) {
       // TODO: сохранение в переменную, отправка события что все ок
     } else {
-      this.io.emit(ChatbotEventType.SendMessage, {
+      this.io.emit(EventType.SendMessage, {
         chatId: chat.id,
         text: node.text,
       });
@@ -278,7 +278,7 @@ class Chatbot {
     if (this.session[chat.id].wait) {
       // TODO: получить какую кнопку нажал пользователь. Перейти на ноду, закрепленную за этой кнопкой
     } else {
-      this.io.emit(ChatbotEventType.SendMessage, {
+      this.io.emit(EventType.SendMessage, {
         chatId: chat.id,
         text: node.text,
         buttons: node.buttons,
@@ -289,20 +289,20 @@ class Chatbot {
 
   private handleBranch(chat: Chat, node: Node): void {
     // TODO: найти подходящее условие и перейти на ноду, закрепенную за этим усовием
-    this.io.emit(ChatbotEventType.Callback, {
+    this.io.emit(EventType.Callback, {
       chatId: chat.id,
     });
   }
 
   private handleServiceCall(chat: Chat, node: Node): void {
     // TODO: вызвать внешний api, перейти на следующую ноду
-    this.io.emit(ChatbotEventType.Callback, {
+    this.io.emit(EventType.Callback, {
       chatId: chat.id,
     });
   }
 
   private handleTransfer(chat: Chat, node: Transfer): void {
-    this.io.emit(ChatbotEventType.Transfer, {
+    this.io.emit(EventType.Transfer, {
       chatId: chat.id,
       assignedTo: node.assignedTo,
     });
@@ -310,7 +310,7 @@ class Chatbot {
   }
 
   private handleAssignTag(chat: Chat, node: AssignTag): void {
-    this.io.emit(ChatbotEventType.AssignTag, {
+    this.io.emit(EventType.AssignTag, {
       chatId: chat.id,
       tag: node.tag,
     });
@@ -318,7 +318,7 @@ class Chatbot {
   }
 
   private handleClose(chat: Chat, node: Close): void {
-    this.io.emit(ChatbotEventType.Close, {
+    this.io.emit(EventType.Close, {
       chatId: chat.id,
     });
     this.session[chat.id].node = this.schema.nodes[node.next as any];

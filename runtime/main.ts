@@ -189,9 +189,9 @@ export enum ChatbotEventType {
   NewEvent = 'NewEvent',
   Callback = 'Callback',
   SendMessage = 'SendMessage',
+  Transfer = 'Transfer',
   AssignTag = 'AssignTag',
-  TransferContact = 'TransferContact',
-  CloseContact = 'CloseContact',
+  Close = 'Close',
 }
 
 class Chatbot {
@@ -219,6 +219,7 @@ class Chatbot {
   private handleNewEvent(chat: Chat): void {
     this.queue.push(() => {
       if (!this.session[chat.id]) {
+        // TODO: проверка триггера чатбота
         this.session[chat.id] = {
           chat,
           node: this.getStartNode(),
@@ -325,7 +326,7 @@ class Chatbot {
   }
 
   private handleTransfer(chat: Chat, node: Transfer): void {
-    this.io.emit(ChatbotEventType.TransferContact, {
+    this.io.emit(ChatbotEventType.Transfer, {
       chatId: chat.id,
       assignedTo: node.assignedTo,
     });
@@ -341,7 +342,7 @@ class Chatbot {
   }
 
   private handleClose(chat: Chat, node: Close): void {
-    this.io.emit(ChatbotEventType.CloseContact, {
+    this.io.emit(ChatbotEventType.Close, {
       chatId: chat.id,
     });
     this.session[chat.id].node = this.schema.nodes[node.next as any];

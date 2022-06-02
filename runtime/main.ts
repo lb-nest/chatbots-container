@@ -201,6 +201,18 @@ class Chatbot {
 
   private queue = new Queue();
 
+  private handlers: Record<NodeType, Function> = {
+    [NodeType.Start]: this.handleStart,
+    [NodeType.SendMessage]: this.handleSendMessage,
+    [NodeType.CollectInput]: this.handleCollectInput,
+    [NodeType.Buttons]: this.handleButtons,
+    [NodeType.Branch]: this.handleBranch,
+    [NodeType.ServiceCall]: this.handleServiceCall,
+    [NodeType.Transfer]: this.handleTransfer,
+    [NodeType.AssignTag]: this.handleAssignTag,
+    [NodeType.Close]: this.handleClose,
+  };
+
   constructor(private config: ConfigByEnvironment) {
     this.schema = JSON.parse(config.schema);
     this.io = io(config.ws, {
@@ -230,43 +242,7 @@ class Chatbot {
       }
 
       const session = this.session[chat.id];
-      switch (session.node.type) {
-        case NodeType.Start:
-          this.handleStart(session.chat, session.node);
-          break;
-
-        case NodeType.SendMessage:
-          this.handleSendMessage(session.chat, session.node);
-          break;
-
-        case NodeType.CollectInput:
-          this.handleCollectInput(session.chat, session.node);
-          break;
-
-        case NodeType.Buttons:
-          this.handleButtons(session.chat, session.node);
-          break;
-
-        case NodeType.Branch:
-          this.handleBranch(session.chat, session.node);
-          break;
-
-        case NodeType.ServiceCall:
-          this.handleServiceCall(session.chat, session.node);
-          break;
-
-        case NodeType.Transfer:
-          this.handleTransfer(session.chat, session.node);
-          break;
-
-        case NodeType.AssignTag:
-          this.handleAssignTag(session.chat, session.node);
-          break;
-
-        case NodeType.Close:
-          this.handleClose(session.chat, session.node);
-          break;
-      }
+      this.handlers[session.node.type]?.(session.chat, session.node);
     });
   }
 

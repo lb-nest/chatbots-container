@@ -182,12 +182,14 @@ interface Session {
   chat: Chat;
   node: Node;
   variables: Record<string, Variable>;
+  wait?: boolean;
 }
 
 export enum ChatbotEventType {
-  NewAssignment = 'NewAssignment',
-  NewMessage = 'NewMessage',
-  SetTag = 'SetTag',
+  NewEvent = 'NewEvent',
+  Callback = 'Callback',
+  SendMessage = 'SendMessage',
+  AssignTag = 'AssignTag',
   TransferContact = 'TransferContact',
   CloseContact = 'CloseContact',
 }
@@ -209,13 +211,12 @@ class Chatbot {
       },
     });
 
-    this.io.on(ChatbotEventType.NewAssignment, this.handleNewAssignment.bind(this));
-    this.io.on(ChatbotEventType.NewMessage, this.handleNewMessage.bind(this));
+    this.io.on(ChatbotEventType.NewEvent, this.handleNewEvent.bind(this));
   }
 
   start(): void {}
 
-  private handleNewAssignment(chat: Chat): void {
+  private handleNewEvent(chat: Chat): void {
     this.queue.push(() => {
       if (!this.session[chat.id]) {
         this.session[chat.id] = {
@@ -226,45 +227,124 @@ class Chatbot {
           ),
         };
       }
-    });
-  }
 
-  private handleNewMessage(chat: Chat): void {
-    this.queue.push(() => {
       const session = this.session[chat.id];
-
       switch (session.node.type) {
         case NodeType.Start:
-          session.node = this.schema.nodes[session.node.next as any];
+          this.handleStart(session.chat, session.node);
           break;
 
         case NodeType.SendMessage:
-          console.log(1);
-
+          this.handleSendMessage(session.chat, session.node);
           break;
 
         case NodeType.CollectInput:
+          this.handleCollectInput(session.chat, session.node);
           break;
 
         case NodeType.Buttons:
+          this.handleButtons(session.chat, session.node);
           break;
 
         case NodeType.Branch:
+          this.handleBranch(session.chat, session.node);
           break;
 
         case NodeType.ServiceCall:
+          this.handleServiceCall(session.chat, session.node);
           break;
 
         case NodeType.Transfer:
+          this.handleTransfer(session.chat, session.node);
           break;
 
         case NodeType.AssignTag:
+          this.handleAssignTag(session.chat, session.node);
           break;
 
         case NodeType.Close:
+          this.handleClose(session.chat, session.node);
           break;
       }
     });
+  }
+
+  private handleStart(chat: Chat, node: Start): void {
+    this.io.emit(ChatbotEventType.Callback, {
+      chatId: chat.id,
+    });
+    this.session[chat.id].node = this.schema.nodes[node.next as any];
+  }
+
+  private handleSendMessage(chat: Chat, node: SendMessage): void {
+    this.io.emit(ChatbotEventType.SendMessage, {
+      chatId: chat.id,
+      text: node.text,
+      attachments: node.attachments,
+    });
+    this.session[chat.id].node = this.schema.nodes[node.next as any];
+  }
+
+  private handleCollectInput(chat: Chat, node: CollectInput): void {
+    if (this.session[chat.id].wait) {
+      // TODO: сохранение в переменную, отправка события что все ок
+    } else {
+      this.io.emit(ChatbotEventType.SendMessage, {
+        chatId: chat.id,
+        text: node.text,
+      });
+      this.session[chat.id].wait = true;
+    }
+  }
+
+  private handleButtons(chat: Chat, node: Buttons): void {
+    if (this.session[chat.id].wait) {
+      // TODO: получить какую кнопку нажал пользователь. Перейти на ноду, закрепленную за этой кнопкой
+    } else {
+      this.io.emit(ChatbotEventType.SendMessage, {
+        chatId: chat.id,
+        text: node.text,
+        buttons: node.buttons,
+      });
+      this.session[chat.id].wait = true;
+    }
+  }
+
+  private handleBranch(chat: Chat, node: Node): void {
+    // TODO: найти подходящее условие и перейти на ноду, закрепенную за этим усовием
+    this.io.emit(ChatbotEventType.Callback, {
+      chatId: chat.id,
+    });
+  }
+
+  private handleServiceCall(chat: Chat, node: Node): void {
+    // TODO: вызвать внешний api, перейти на следующую ноду
+    this.io.emit(ChatbotEventType.Callback, {
+      chatId: chat.id,
+    });
+  }
+
+  private handleTransfer(chat: Chat, node: Transfer): void {
+    this.io.emit(ChatbotEventType.TransferContact, {
+      chatId: chat.id,
+      assignedTo: node.assignedTo,
+    });
+    this.session[chat.id].node = this.schema.nodes[node.next as any];
+  }
+
+  private handleAssignTag(chat: Chat, node: AssignTag): void {
+    this.io.emit(ChatbotEventType.AssignTag, {
+      chatId: chat.id,
+      tag: node.tag,
+    });
+    this.session[chat.id].node = this.schema.nodes[node.next as any];
+  }
+
+  private handleClose(chat: Chat, node: Close): void {
+    this.io.emit(ChatbotEventType.CloseContact, {
+      chatId: chat.id,
+    });
+    this.session[chat.id].node = this.schema.nodes[node.next as any];
   }
 
   private getStartNode(): any {

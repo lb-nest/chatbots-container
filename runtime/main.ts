@@ -186,8 +186,7 @@ interface Session {
 
 export enum ChatbotEventType {
   NewAssignment = 'NewAssignment',
-  IncomingMessage = 'IncomingMessage',
-  OutgoingMessage = 'OutgoingMessage',
+  NewMessage = 'NewMessage',
   SetTag = 'SetTag',
   TransferContact = 'TransferContact',
   CloseContact = 'CloseContact',
@@ -211,7 +210,7 @@ class Chatbot {
     });
 
     this.io.on(ChatbotEventType.NewAssignment, this.handleNewAssignment.bind(this));
-    this.io.on(ChatbotEventType.IncomingMessage, this.handleIncomingMessage.bind(this));
+    this.io.on(ChatbotEventType.NewMessage, this.handleNewMessage.bind(this));
   }
 
   start(): void {}
@@ -227,7 +226,11 @@ class Chatbot {
           ),
         };
       }
+    });
+  }
 
+  private handleNewMessage(chat: Chat): void {
+    this.queue.push(() => {
       const session = this.session[chat.id];
 
       switch (session.node.type) {
@@ -263,8 +266,6 @@ class Chatbot {
       }
     });
   }
-
-  private handleIncomingMessage(): void {}
 
   private getStartNode(): any {
     return Object.values(this.schema.nodes).find((node: any) => node.type === 'Start');

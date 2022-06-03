@@ -278,12 +278,12 @@ class Chatbot {
   private handleNewEvent(chat: Chat): void {
     this.queue.push(() => {
       if (this.session[chat.id] === undefined) {
-        const node = this.getStart();
+        const node = this.findStart();
         if (this.check(node.trigger, chat)) {
           this.session[chat.id] = {
             chat,
             node,
-            variables: this.getVariables(),
+            variables: this.initializeVariables(),
           };
         }
       }
@@ -297,7 +297,7 @@ class Chatbot {
     this.io.emit(EventType.Callback, {
       chatId: chat.id,
     });
-    this.session[chat.id].node = this.schema.nodes[node.next as any];
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private handleSendMessage(chat: Chat, node: SendMessage): void {
@@ -306,12 +306,16 @@ class Chatbot {
       text: node.text,
       attachments: node.attachments,
     });
-    this.session[chat.id].node = this.schema.nodes[node.next as any];
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private handleCollectInput(chat: Chat, node: CollectInput): void {
     if (this.session[chat.id].wait) {
-      // TODO: сохранение в переменную, отправка события что все ок
+      // TODO: сохранение в переменную
+
+      this.io.emit(EventType.Callback, {
+        chatId: chat.id,
+      });
     } else {
       this.io.emit(EventType.SendMessage, {
         chatId: chat.id,
@@ -335,7 +339,7 @@ class Chatbot {
   }
 
   private handleBranch(chat: Chat, node: Node): void {
-    // TODO: найти подходящее условие и перейти на ноду, закрепенную за этим усовием
+    // TODO: найти подходящее условие и перейти на ноду, закрепенную за этим условием
     this.io.emit(EventType.Callback, {
       chatId: chat.id,
     });
@@ -353,7 +357,7 @@ class Chatbot {
       chatId: chat.id,
       assignedTo: node.assignedTo,
     });
-    this.session[chat.id].node = this.schema.nodes[node.next as any];
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private handleAssignTag(chat: Chat, node: AssignTag): void {
@@ -361,21 +365,21 @@ class Chatbot {
       chatId: chat.id,
       tag: node.tag,
     });
-    this.session[chat.id].node = this.schema.nodes[node.next as any];
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private handleClose(chat: Chat, node: Close): void {
     this.io.emit(EventType.Close, {
       chatId: chat.id,
     });
-    this.session[chat.id].node = this.schema.nodes[node.next as any];
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
-  private getStart(): Start {
+  private findStart(): Start {
     return <Start>Object.values(this.schema.nodes).find(({ type }) => type === NodeType.Start);
   }
 
-  private getVariables(): Record<string, Variable> {
+  private initializeVariables(): Record<string, Variable> {
     return Object.fromEntries(this.schema.variables.map((variable) => [variable.id, variable]));
   }
 

@@ -211,7 +211,7 @@ class Queue {
     this.lock = true;
 
     for await (const fn of this) {
-      await fn();
+      await fn?.();
     }
 
     this.lock = false;
@@ -271,7 +271,9 @@ class Chatbot {
   private handleCallback(chat: Chat): void {
     this.queue.unshift(() => {
       const session = this.session[chat.id];
-      this.handlers[session.node?.type]?.(session.chat, session.node);
+      if (session) {
+        this.handlers[session.node?.type]?.(session.chat, session.node);
+      }
     });
   }
 
@@ -279,13 +281,16 @@ class Chatbot {
     this.queue.push(() => {
       if (this.session[chat.id] === undefined) {
         const node = this.findStart();
-        if (this.check(node.trigger, chat)) {
-          this.session[chat.id] = {
-            chat,
-            node,
-            variables: this.initializeVariables(),
-          };
+
+        if (!this.check(node.trigger, chat)) {
+          return;
         }
+
+        this.session[chat.id] = {
+          chat,
+          node,
+          variables: this.initializeVariables(),
+        };
       }
 
       const session = this.session[chat.id];

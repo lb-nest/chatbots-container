@@ -289,9 +289,7 @@ class Chatbot {
       }
 
       const session = this.session[chat.id];
-      if (session) {
-        this.handlers[session.node?.type]?.(session.chat, session.node);
-      }
+      this.handlers[session.node?.type]?.(session.chat, session.node);
     });
   }
 

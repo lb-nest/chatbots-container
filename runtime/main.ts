@@ -1,7 +1,5 @@
 // @ts-ignore
 import io from 'https://cdn.socket.io/4.4.1/socket.io.esm.min.js';
-// @ts-ignore
-import Queue from 'https://deno.land/x/queue/mod.ts';
 
 declare const Deno: Record<string, any>;
 
@@ -62,6 +60,7 @@ interface Start extends NodeBase<NodeType.Start> {
   trigger: TriggerType;
   next?: string;
 }
+
 interface SendMessage extends NodeBase<NodeType.SendMessage> {
   text: string;
   attachments: Attachment[];
@@ -178,6 +177,47 @@ interface Chat {
   [key: string]: any;
 }
 
+class Queue {
+  private fn: Function[] = [];
+  private lock = false;
+
+  [Symbol.asyncIterator]() {
+    return {
+      next: async () => {
+        const fn = this.fn.shift();
+        return {
+          done: fn === undefined,
+          value: fn,
+        };
+      },
+    };
+  }
+
+  async push(fn: Function): Promise<void> {
+    this.fn.push(fn);
+    if (!this.lock) {
+      await this.execute();
+    }
+  }
+
+  async unshift(fn: Function): Promise<void> {
+    this.fn.unshift(fn);
+    if (!this.lock) {
+      await this.execute();
+    }
+  }
+
+  private async execute(): Promise<void> {
+    this.lock = true;
+
+    for await (const fn of this) {
+      await fn();
+    }
+
+    this.lock = false;
+  }
+}
+
 interface Session {
   chat: Chat;
   node: Node;
@@ -202,15 +242,15 @@ class Chatbot {
   private queue = new Queue();
 
   private handlers: Record<NodeType, Function> = {
-    [NodeType.Start]: this.handleStart,
-    [NodeType.SendMessage]: this.handleSendMessage,
-    [NodeType.CollectInput]: this.handleCollectInput,
+    [NodeType.Start]: this.handleStart.bind(this),
+    [NodeType.SendMessage]: this.handleSendMessage.bind(this),
+    [NodeType.CollectInput]: this.handleCollectInput.bind(this),
     [NodeType.Buttons]: this.handleButtons,
-    [NodeType.Branch]: this.handleBranch,
-    [NodeType.ServiceCall]: this.handleServiceCall,
-    [NodeType.Transfer]: this.handleTransfer,
-    [NodeType.AssignTag]: this.handleAssignTag,
-    [NodeType.Close]: this.handleClose,
+    [NodeType.Branch]: this.handleBranch.bind(this),
+    [NodeType.ServiceCall]: this.handleServiceCall.bind(this),
+    [NodeType.Transfer]: this.handleTransfer.bind(this),
+    [NodeType.AssignTag]: this.handleAssignTag.bind(this),
+    [NodeType.Close]: this.handleClose.bind(this),
   };
 
   constructor(private config: ConfigByEnvironment) {
@@ -219,30 +259,39 @@ class Chatbot {
       transports: ['websocket'],
       auth: {
         token: config.token,
-        trigger: this.getStartNode()?.trigger,
       },
     });
 
     this.io.on(EventType.NewEvent, this.handleNewEvent.bind(this));
+    this.io.on(EventType.Callback, this.handleCallback.bind(this));
   }
 
   start(): void {}
 
+  private handleCallback(chat: Chat): void {
+    this.queue.unshift(() => {
+      const session = this.session[chat.id];
+      this.handlers[session.node?.type]?.(session.chat, session.node);
+    });
+  }
+
   private handleNewEvent(chat: Chat): void {
     this.queue.push(() => {
-      if (!this.session[chat.id]) {
-        // TODO: проверка триггера чатбота
-        this.session[chat.id] = {
-          chat,
-          node: this.getStartNode(),
-          variables: Object.fromEntries(
-            this.schema.variables.map((variable) => [variable.id, variable]),
-          ),
-        };
+      if (this.session[chat.id] === undefined) {
+        const node = this.getStart();
+        if (this.check(node.trigger, chat)) {
+          this.session[chat.id] = {
+            chat,
+            node,
+            variables: this.getVariables(),
+          };
+        }
       }
 
       const session = this.session[chat.id];
-      this.handlers[session.node.type]?.(session.chat, session.node);
+      if (session) {
+        this.handlers[session.node?.type]?.(session.chat, session.node);
+      }
     });
   }
 
@@ -324,8 +373,25 @@ class Chatbot {
     this.session[chat.id].node = this.schema.nodes[node.next as any];
   }
 
-  private getStartNode(): any {
-    return Object.values(this.schema.nodes).find((node: any) => node.type === 'Start');
+  private getStart(): Start {
+    return <Start>Object.values(this.schema.nodes).find(({ type }) => type === NodeType.Start);
+  }
+
+  private getVariables(): Record<string, Variable> {
+    return Object.fromEntries(this.schema.variables.map((variable) => [variable.id, variable]));
+  }
+
+  private check(trigger: TriggerType, chat: Chat): boolean {
+    switch (trigger) {
+      case TriggerType.NewAssignment:
+        return chat.isFlow && chat.contact.assignedTo?.id === this.config.id;
+
+      case TriggerType.NewChat:
+        return chat.isNew;
+
+      default:
+        throw new Error();
+    }
   }
 }
 

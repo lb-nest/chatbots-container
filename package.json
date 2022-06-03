@@ -1,5 +1,5 @@
 {
-  "name": "chatbots-compiler",
+  "name": "chatbots-container",
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",

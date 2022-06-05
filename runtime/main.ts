@@ -173,8 +173,47 @@ interface Schema {
   variables: Variable[];
 }
 
-interface Chat {
+enum ContactStatus {
+  Open = 'Open',
+  Closed = 'Closed',
+}
+
+interface Tag {
+  id: number;
+  name: string;
+  description: string;
+  color: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ContactTag {
+  tag: Tag;
+}
+
+interface Contact {
+  id: number;
+  username: string;
+  name: string;
+  avatarUrl: string | null;
+  status: ContactStatus;
+  assignedTo?: any;
+  notes: string;
+  priority: boolean;
+  resolved: boolean;
+  tags: ContactTag[];
+}
+
+interface Message {
   [key: string]: any;
+}
+
+interface Chat {
+  id: number;
+  contact: Contact;
+  messages: Message[];
+  isNew: boolean;
+  isFlow?: boolean;
 }
 
 class Queue {
@@ -391,7 +430,11 @@ class Chatbot {
   private check(trigger: TriggerType, chat: Chat): boolean {
     switch (trigger) {
       case TriggerType.NewAssignment:
-        return chat.isFlow && chat.contact.assignedTo?.id === this.config.id;
+        return (
+          chat.isFlow &&
+          chat.contact.assignedTo?.id === this.config.id &&
+          chat.contact.status === ContactStatus.Open
+        );
 
       case TriggerType.NewChat:
         return chat.isNew;

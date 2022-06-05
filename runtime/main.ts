@@ -338,52 +338,95 @@ class Chatbot {
   }
 
   private handleStart(chat: Chat, node: Start): void {
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.Callback, {
       chatId: chat.id,
     });
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private handleSendMessage(chat: Chat, node: SendMessage): void {
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.SendMessage, {
       chatId: chat.id,
       text: node.text,
       attachments: node.attachments,
     });
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private handleCollectInput(chat: Chat, node: CollectInput): void {
-    if (this.session[chat.id].wait) {
-      // TODO: сохранение в переменную
+    const session = this.session[chat.id];
+    if (session.wait) {
+      const { text } = chat.messages[0];
+
+      // TODO: валидация
+      if (text) {
+        session.variables[node.variable] = text;
+        session.node = this.schema.nodes[<any>node.next];
+      }
 
       this.io.emit(EventType.Callback, {
         chatId: chat.id,
       });
     } else {
+      session.wait = true;
       this.io.emit(EventType.SendMessage, {
         chatId: chat.id,
         text: node.text,
       });
-      this.session[chat.id].wait = true;
     }
   }
 
   private handleButtons(chat: Chat, node: Buttons): void {
-    if (this.session[chat.id].wait) {
-      // TODO: получить какую кнопку нажал пользователь. Перейти на ноду, закрепленную за этой кнопкой
+    const session = this.session[chat.id];
+    if (session.wait) {
+      const button = node.buttons.find(({ text }) => text === chat.messages[0].text);
+
+      if (button) {
+        this.session[chat.id].node = this.schema.nodes[<any>button.next];
+      }
+
+      this.io.emit(EventType.Callback, {
+        chatId: chat.id,
+      });
     } else {
+      this.session[chat.id].wait = true;
       this.io.emit(EventType.SendMessage, {
         chatId: chat.id,
         text: node.text,
         buttons: node.buttons,
       });
-      this.session[chat.id].wait = true;
     }
   }
 
-  private handleBranch(chat: Chat, node: Node): void {
-    // TODO: найти подходящее условие и перейти на ноду, закрепенную за этим условием
+  private handleBranch(chat: Chat, node: Branch): void {
+    const session = this.session[chat.id];
+    const branch = node.branches.find((branch) =>
+      ({
+        [ComparsionType.All]: (a: boolean[]) => a.every(Boolean),
+        [ComparsionType.Any]: (a: boolean[]) => a.some(Boolean),
+      }[branch.type](
+        branch.conditions.map((condition) =>
+          ({
+            [OperatorType.Eq]: (a: any, b: any) => a === b,
+            [OperatorType.Gt]: (a: any, b: any) => a > b,
+            [OperatorType.Gte]: (a: any, b: any) => a >= b,
+            [OperatorType.Lt]: (a: any, b: any) => a < b,
+            [OperatorType.Lte]: (a: any, b: any) => a <= b,
+            [OperatorType.Neq]: (a: any, b: any) => a !== b,
+          }[condition.operator](
+            session.variables[condition.variable1],
+            session.variables[condition.variable2],
+          )),
+        ),
+      )),
+    );
+
+    if (branch) {
+      this.session[chat.id].node = this.schema.nodes[<any>branch.next];
+    } else {
+      this.session[chat.id].node = this.schema.nodes[<any>node.default];
+    }
+
     this.io.emit(EventType.Callback, {
       chatId: chat.id,
     });
@@ -397,26 +440,26 @@ class Chatbot {
   }
 
   private handleTransfer(chat: Chat, node: Transfer): void {
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.Transfer, {
       chatId: chat.id,
       assignedTo: node.assignedTo,
     });
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private handleAssignTag(chat: Chat, node: AssignTag): void {
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.AssignTag, {
       chatId: chat.id,
       tag: node.tag,
     });
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private handleClose(chat: Chat, node: Close): void {
+    this.session[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.Close, {
       chatId: chat.id,
     });
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
   }
 
   private findStart(): Start {

@@ -354,8 +354,7 @@ class Chatbot {
     if (session.wait) {
       const { text } = chat.messages[0];
 
-      // TODO: валидация
-      if (text) {
+      if (this.validate(node.validation, text)) {
         session.variables[node.variable] = text;
         session.node = this.schema.nodes[<any>node.next];
       }
@@ -481,6 +480,10 @@ class Chatbot {
       default:
         throw new Error();
     }
+  }
+
+  private validate(validation: ValidationType, text: any): boolean {
+    return true;
   }
 }
 

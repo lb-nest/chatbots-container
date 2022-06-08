@@ -25,7 +25,7 @@ export class ProcessManager {
 
   stop(id: string): void {
     if (this.process[id]?.kill('SIGTERM')) {
-      this.process[id]?.removeAllListeners();
+      this.process[id].removeAllListeners();
       delete this.process[id];
     }
   }

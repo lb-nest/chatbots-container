@@ -1,39 +1,42 @@
 import 'reflect-metadata';
 import { plainToClass } from 'class-transformer';
 import { validateSync } from 'class-validator';
+import { validationMetadatasToSchemas } from 'class-validator-jsonschema';
 import { config } from 'dotenv';
 import fastify from 'fastify';
 import { JwtPayload, verify } from 'jsonwebtoken';
 import { ProcessManager } from './process-manager';
-import { off, on } from './schemas';
 import { Schema } from './types';
 
 config();
 
-const app = fastify({ logger: true });
+const schemas = validationMetadatasToSchemas();
+const app = fastify({
+  logger: true,
+});
 const manager = new ProcessManager();
 
-app.post('/on', {
-  schema: on,
+app.post('/start', {
+  schema: undefined,
   handler: async (req, reply) => {
-    const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
-
     const schema = plainToClass(Schema, req.body);
     const errors = validateSync(schema);
 
     if (errors.length) {
-      const error: any = new Error('body has validation errors');
-      error.statusCode = 400;
-
-      throw error;
+      const error = new Error('body has validation errors');
+      throw Object.assign(error, {
+        statusCode: 400,
+      });
     }
 
-    manager.start(jwt.id, 'runtime/main.ts', {
+    const token = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
+
+    manager.start(token.id, 'runtime/main.ts', {
       schema: JSON.stringify({
         ...schema,
-        nodes: schema.nodes.reduce((s, n) => Object.assign(s, { [n.id]: n }), {}),
+        nodes: Object.fromEntries(schema.nodes.map((node) => [node.id, node])),
       }),
-      ws: jwt.ws,
+      ws: token.ws,
       token: req.headers.token,
     });
 
@@ -41,8 +44,8 @@ app.post('/on', {
   },
 });
 
-app.post('/off', {
-  schema: off,
+app.post('/stop', {
+  schema: undefined,
   handler: async (req, reply) => {
     const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
     manager.stop(jwt.id);

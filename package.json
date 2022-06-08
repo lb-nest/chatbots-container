@@ -1,7 +1,7 @@
 {
   "name": "chatbots-container",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/main.js",
   "license": "MIT",
   "scripts": {
     "prebuild": "rimraf dist",
@@ -19,6 +19,7 @@
   "dependencies": {
     "class-transformer": "^0.5.1",
     "class-validator": "^0.13.2",
+    "class-validator-jsonschema": "^3.1.1",
     "dotenv": "^16.0.1",
     "fastify": "^3.29.0",
     "jsonwebtoken": "^8.5.1",

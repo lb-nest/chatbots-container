@@ -261,6 +261,7 @@ interface Session {
   chat: Chat;
   node: Node;
   variables: Record<string, Variable>;
+  queue: Queue;
   wait?: boolean;
 }
 
@@ -277,8 +278,6 @@ class Chatbot {
   private schema: Schema;
   private session: Record<number, Session> = {};
   private io: any;
-
-  private queue = new Queue();
 
   private handlers: Record<NodeType, Function> = {
     [NodeType.Start]: this.handleStart.bind(this),
@@ -308,33 +307,30 @@ class Chatbot {
   start(): void {}
 
   private handleCallback(chat: Chat): void {
-    this.queue.unshift(() => {
-      const session = this.session[chat.id];
-      if (session) {
-        this.handlers[session.node?.type]?.(session.chat, session.node);
-      }
-    });
+    const session = this.session[chat.id];
+    if (session) {
+      session.queue.unshift(() => this.handlers[session.node?.type]?.(session.chat, session.node));
+    }
   }
 
   private handleNewEvent(chat: Chat): void {
-    this.queue.push(() => {
-      if (this.session[chat.id] === undefined) {
-        const node = this.findStart();
+    if (this.session[chat.id] === undefined) {
+      const node = this.findStart();
 
-        if (!this.check(node.trigger, chat)) {
-          return;
-        }
-
-        this.session[chat.id] = {
-          chat,
-          node,
-          variables: this.initializeVariables(),
-        };
+      if (!this.check(node.trigger, chat)) {
+        return;
       }
 
-      const session = this.session[chat.id];
-      this.handlers[session.node?.type]?.(session.chat, session.node);
-    });
+      this.session[chat.id] = {
+        chat,
+        node,
+        variables: this.initializeVariables(),
+        queue: new Queue(),
+      };
+    }
+
+    const session = this.session[chat.id];
+    session.queue.push(() => this.handlers[session.node?.type]?.(session.chat, session.node));
   }
 
   private handleStart(chat: Chat, node: Start): void {

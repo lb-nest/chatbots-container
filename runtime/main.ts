@@ -158,7 +158,7 @@ type Node =
   | Close;
 
 enum VariableType {
-  String = 'String',
+  Any = 'Any',
 }
 
 interface Variable {
@@ -469,7 +469,7 @@ class Chatbot {
     switch (trigger) {
       case TriggerType.NewAssignment:
         return (
-          chat.isFlow &&
+          chat.isFlow === true &&
           chat.contact.assignedTo?.id === this.config.id &&
           chat.contact.status === ContactStatus.Open
         );

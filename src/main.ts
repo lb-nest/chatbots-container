@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+
 import { plainToClass } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { validationMetadatasToSchemas } from 'class-validator-jsonschema';
@@ -31,7 +32,7 @@ app.post('/start', {
 
     const token = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
 
-    manager.start(token.id, 'runtime/main.ts', {
+    manager.start(token.id, 'deno-runtime/main.ts', {
       schema: JSON.stringify({
         ...schema,
         nodes: Object.fromEntries(schema.nodes.map((node) => [node.id, node])),

@@ -55,4 +55,4 @@ app.post('/stop', {
   },
 });
 
-app.listen(Number(process.env.PORT));
+app.listen(Number(process.env.PORT), '0.0.0.0');

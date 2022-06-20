@@ -18,5 +18,5 @@
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false
   },
-  "exclude": ["runtime", "node_modules", "test", "dist", "**/*spec.ts"]
+  "exclude": ["deno-runtime", "node_modules", "test", "dist", "**/*spec.ts"]
 }

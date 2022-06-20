@@ -1,8 +1,7 @@
 import 'reflect-metadata';
 
 import { plainToClass } from 'class-transformer';
-import { validateSync } from 'class-validator';
-import { validationMetadatasToSchemas } from 'class-validator-jsonschema';
+import { validate } from 'class-validator';
 import { config } from 'dotenv';
 import fastify from 'fastify';
 import { JwtPayload, verify } from 'jsonwebtoken';
@@ -11,33 +10,30 @@ import { Schema } from './types';
 
 config();
 
-const schemas = validationMetadatasToSchemas();
+const processManager = new ProcessManager();
 const app = fastify({
   logger: true,
 });
-const manager = new ProcessManager();
 
 app.post('/start', {
-  schema: undefined,
   handler: async (req, reply) => {
     const schema = plainToClass(Schema, req.body);
-    const errors = validateSync(schema);
 
+    const errors = await validate(schema);
     if (errors.length) {
-      const error = new Error('body has validation errors');
-      throw Object.assign(error, {
+      throw Object.assign(new Error('body has validation errors'), {
         statusCode: 400,
       });
     }
 
-    const token = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
+    const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
 
-    manager.start(token.id, 'deno-runtime/main.ts', {
+    processManager.start(jwt.id, 'deno-runtime/main.ts', {
       schema: JSON.stringify({
         ...schema,
         nodes: Object.fromEntries(schema.nodes.map((node) => [node.id, node])),
       }),
-      ws: token.ws,
+      ws: jwt.ws,
       token: req.headers.token,
     });
 
@@ -46,10 +42,9 @@ app.post('/start', {
 });
 
 app.post('/stop', {
-  schema: undefined,
   handler: async (req, reply) => {
     const jwt = <JwtPayload>verify(String(req.headers.token), process.env.SECRET);
-    manager.stop(jwt.id);
+    processManager.stop(jwt.id);
 
     reply.code(204).send();
   },

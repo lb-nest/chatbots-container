@@ -21,14 +21,14 @@ Body
 {
   "nodes": [
     {
-      "id": 0,
+      "id": "0",
       "type": "Start",
       "name": "Bot is triggered if...",
       "trigger": "NewChat",
-      "next": 1
+      "next": "1"
     },
     {
-      "id": 1,
+      "id": "1",
       "type": "SendMessage",
       "name": "Send message 1",
       "text": "Hi there! My name is...",

@@ -6,6 +6,10 @@ declare const Deno: Record<string, any>;
 class ConfigByEnvironment {
   [key: string]: any;
 
+  get<T = any>(key: string): T {
+    return this[key];
+  }
+
   constructor() {
     Object.assign(this, Deno.env.toObject());
   }
@@ -80,6 +84,7 @@ interface CollectInput extends NodeBase<NodeType.CollectInput> {
   text: string;
   variable: string;
   validation: ValidationType;
+  regex?: string;
   next?: string;
 }
 
@@ -354,7 +359,7 @@ class Chatbot {
     if (session.wait) {
       const { text } = chat.messages[0];
 
-      if (this.validate(node.validation, text)) {
+      if (this.validate(node.validation, text, node)) {
         session.variables[node.variable] = text;
         session.node = this.schema.nodes[<any>node.next];
       }
@@ -427,11 +432,29 @@ class Chatbot {
     });
   }
 
-  private handleServiceCall(chat: Chat, node: Node): void {
-    // TODO: вызвать внешний api, перейти на следующую ноду
-    this.io.emit(EventType.Callback, {
-      chatId: chat.id,
-    });
+  private handleServiceCall(chat: Chat, node: ServiceCall): void {
+    (async () => {
+      const res = await fetch(node.request.url, {
+        headers: Object.assign(
+          {
+            'Content-Type': 'application/json',
+          },
+          node.request.headers,
+        ),
+        body: JSON.stringify(node.request.body),
+      });
+
+      if (res.ok) {
+        this.session[chat.id].node = this.schema.nodes[<any>node.next];
+        // TODO: маппинг ответа
+      } else {
+        this.session[chat.id].node = this.schema.nodes[<any>node.error];
+      }
+
+      this.io.emit(EventType.Callback, {
+        chatId: chat.id,
+      });
+    })();
   }
 
   private handleTransfer(chat: Chat, node: Transfer): void {
@@ -482,8 +505,26 @@ class Chatbot {
     }
   }
 
-  private validate(validation: ValidationType, text: any): boolean {
-    return true;
+  private validate(validation: ValidationType, text: any, options?: any): boolean {
+    switch (validation) {
+      case ValidationType.Boolean:
+        return typeof text === 'boolean';
+
+      case ValidationType.Email:
+        return true;
+
+      case ValidationType.Number:
+        return typeof text === 'number';
+
+      case ValidationType.Phone:
+        return true;
+
+      case ValidationType.Regex:
+        return new RegExp(options.regex).test(text);
+
+      case ValidationType.String:
+        return typeof text === 'string';
+    }
   }
 }
 

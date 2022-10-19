@@ -30,11 +30,15 @@ interface Attachment {
 
 enum ButtonType {
   QuickReply = 'QuickReply',
+  Url = 'Url',
+  Phone = 'Phone',
 }
 
 interface Button {
   type: ButtonType;
   text: string;
+  url?: string;
+  phone?: string;
   next?: string;
 }
 
@@ -57,7 +61,6 @@ interface NodeBase<T extends NodeType> {
 
 enum TriggerType {
   NewChat = 'NewChat',
-  NewAssignment = 'NewAssignment',
 }
 
 interface Start extends NodeBase<NodeType.Start> {
@@ -77,14 +80,14 @@ enum ValidationType {
   Boolean = 'Boolean',
   Email = 'Email',
   Phone = 'Phone',
-  Regex = 'Regex',
+  RegExp = 'RegExp',
 }
 
 interface CollectInput extends NodeBase<NodeType.CollectInput> {
   text: string;
   variable: string;
   validation: ValidationType;
-  regex?: string;
+  regexp?: string;
   next?: string;
 }
 
@@ -209,16 +212,39 @@ interface Contact {
   tags: ContactTag[];
 }
 
+enum MessageStatus {
+  Submitted = 'Submitted',
+  Delivered = 'Delivered',
+  Read = 'Read',
+  Failed = 'Failed',
+}
+
 interface Message {
-  [key: string]: any;
+  id: number;
+  fromMe: boolean;
+  status: MessageStatus;
+  content: Array<{
+    text: string | null;
+    attachments: Attachment[];
+    buttons: Array<Omit<Button, 'next'>>;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+  chat?: {
+    id: number;
+  };
 }
 
 interface Chat {
   id: number;
   contact: Contact;
-  messages: Message[];
+  messages: Array<Omit<Message, 'chat'>>;
   isNew: boolean;
   isFlow?: boolean;
+}
+
+interface ValidationOptions {
+  regexp?: string;
 }
 
 class Queue {
@@ -271,7 +297,8 @@ interface Session {
 }
 
 export enum EventType {
-  NewEvent = 'NewEvent',
+  NewChat = 'NewChat',
+  Message = 'Message',
   Callback = 'Callback',
   SendMessage = 'SendMessage',
   Transfer = 'Transfer',
@@ -305,20 +332,14 @@ class Chatbot {
       },
     });
 
-    this.io.on(EventType.NewEvent, this.handleNewEvent.bind(this));
+    this.io.on(EventType.NewChat, this.handleNewChat.bind(this));
+    this.io.on(EventType.Message, this.handleMessage.bind(this));
     this.io.on(EventType.Callback, this.handleCallback.bind(this));
   }
 
   start(): void {}
 
-  private handleCallback(chat: Chat): void {
-    const session = this.session[chat.id];
-    if (session) {
-      session.queue.unshift(() => this.handlers[session.node?.type]?.(session.chat, session.node));
-    }
-  }
-
-  private handleNewEvent(chat: Chat): void {
+  private handleNewChat(chat: Chat): void {
     if (this.session[chat.id] === undefined) {
       const node = this.findStart();
 
@@ -336,6 +357,21 @@ class Chatbot {
 
     const session = this.session[chat.id];
     session.queue.push(() => this.handlers[session.node?.type]?.(session.chat, session.node));
+  }
+
+  private handleMessage(message: Required<Message>): void {
+    if (this.session[message.chat.id] === undefined) {
+      return;
+    }
+
+    // TODO: handle message
+  }
+
+  private handleCallback(chat: Chat): void {
+    const session = this.session[chat.id];
+    if (session) {
+      session.queue.unshift(() => this.handlers[session.node?.type]?.(session.chat, session.node));
+    }
   }
 
   private handleStart(chat: Chat, node: Start): void {
@@ -357,10 +393,10 @@ class Chatbot {
   private handleCollectInput(chat: Chat, node: CollectInput): void {
     const session = this.session[chat.id];
     if (session.wait) {
-      const { text } = chat.messages[0];
+      const [{ text }] = chat.messages[0].content;
 
       if (this.validate(node.validation, text, node)) {
-        session.variables[node.variable] = text;
+        session.variables[node.variable].value = text;
         session.node = this.schema.nodes[<any>node.next];
       }
 
@@ -379,7 +415,9 @@ class Chatbot {
   private handleButtons(chat: Chat, node: Buttons): void {
     const session = this.session[chat.id];
     if (session.wait) {
-      const button = node.buttons.find(({ text }) => text === chat.messages[0].text);
+      const button = node.buttons
+        .filter(({ type }) => type === ButtonType.QuickReply)
+        .find(({ text }) => text === chat.messages[0].content[0].text);
 
       if (button) {
         this.session[chat.id].node = this.schema.nodes[<any>button.next];
@@ -433,28 +471,30 @@ class Chatbot {
   }
 
   private handleServiceCall(chat: Chat, node: ServiceCall): void {
-    (async () => {
-      const res = await fetch(node.request.url, {
-        headers: Object.assign(
-          {
-            'Content-Type': 'application/json',
-          },
-          node.request.headers,
-        ),
-        body: JSON.stringify(node.request.body),
-      });
+    fetch(node.request.url, {
+      headers: Object.assign(
+        {
+          'Content-Type': 'application/json',
+        },
+        node.request.headers,
+      ),
+      body: JSON.stringify(node.request.body),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
 
-      if (res.ok) {
         this.session[chat.id].node = this.schema.nodes[<any>node.next];
-        // TODO: маппинг ответа
-      } else {
+      })
+      .catch(() => {
         this.session[chat.id].node = this.schema.nodes[<any>node.error];
-      }
-
-      this.io.emit(EventType.Callback, {
-        chatId: chat.id,
+      })
+      .finally(() => {
+        this.io.emit(EventType.Callback, {
+          chatId: chat.id,
+        });
       });
-    })();
   }
 
   private handleTransfer(chat: Chat, node: Transfer): void {
@@ -490,13 +530,6 @@ class Chatbot {
 
   private check(trigger: TriggerType, chat: Chat): boolean {
     switch (trigger) {
-      case TriggerType.NewAssignment:
-        return (
-          chat.isFlow === true &&
-          chat.contact.assignedTo?.id === this.config.id &&
-          chat.contact.status === ContactStatus.Open
-        );
-
       case TriggerType.NewChat:
         return chat.isNew;
 
@@ -505,7 +538,7 @@ class Chatbot {
     }
   }
 
-  private validate(validation: ValidationType, text: any, options?: any): boolean {
+  private validate(validation: ValidationType, text: any, options?: ValidationOptions): boolean {
     switch (validation) {
       case ValidationType.Boolean:
         return typeof text === 'boolean';
@@ -519,8 +552,8 @@ class Chatbot {
       case ValidationType.Phone:
         return true;
 
-      case ValidationType.Regex:
-        return new RegExp(options.regex).test(text);
+      case ValidationType.RegExp:
+        return typeof options?.regexp === 'string' && new RegExp(options?.regexp).test(text);
 
       case ValidationType.String:
         return typeof text === 'string';

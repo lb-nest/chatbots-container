@@ -1,4 +1,4 @@
-import { IsEnum, IsUrl, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsUrl, IsOptional, IsString, ValidateIf, IsPhoneNumber } from 'class-validator';
 
 export enum AttachmentType {
   Audio = 'Audio',
@@ -21,6 +21,8 @@ export class Attachment {
 
 export enum ButtonType {
   QuickReply = 'QuickReply',
+  Url = 'Url',
+  Phone = 'Phone',
 }
 
 export class Button {
@@ -29,6 +31,16 @@ export class Button {
 
   @IsString()
   text: string;
+
+  @ValidateIf(({ type }) => type === ButtonType.Url)
+  @IsString()
+  @IsUrl()
+  url?: string;
+
+  @ValidateIf(({ type }) => type === ButtonType.Phone)
+  @IsString()
+  @IsPhoneNumber()
+  phone?: string;
 
   @IsOptional()
   @IsString()

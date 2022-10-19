@@ -27,6 +27,7 @@ export const container: FastifyPluginCallback = (app, _, done) => {
           nodes: Object.fromEntries(schema.nodes.map((node) => [node.id, node])),
         }),
       ),
+      id: jwt.id,
       ws: jwt.ws,
       token: req.headers.token,
     });

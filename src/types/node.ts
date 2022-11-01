@@ -34,7 +34,6 @@ export class NodeBase<T extends NodeType> {
 
 export enum TriggerType {
   NewChat = 'NewChat',
-  NewAssignment = 'NewAssignment',
 }
 
 export class Start extends NodeBase<NodeType.Start> {

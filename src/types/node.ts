@@ -34,6 +34,7 @@ export class NodeBase<T extends NodeType> {
 
 export enum TriggerType {
   NewChat = 'NewChat',
+  Webhook = 'Webhook',
 }
 
 export class Start extends NodeBase<NodeType.Start> {
@@ -142,23 +143,19 @@ export class Branch extends NodeBase<NodeType.Branch> {
   default?: string;
 }
 
-export class Request {
+export class ServiceCall extends NodeBase<NodeType.ServiceCall> {
   @IsUrl()
   url: string;
 
   @IsObject()
   headers: Record<string, string>;
 
+  @IsOptional()
   body?: any;
-}
 
-export class ServiceCall extends NodeBase<NodeType.ServiceCall> {
-  @ValidateNested()
-  @IsObject()
-  request: Request;
-
-  @IsObject()
-  response: Record<number, any>;
+  @IsOptional()
+  @IsString()
+  variable?: string;
 
   @IsOptional()
   @IsString()

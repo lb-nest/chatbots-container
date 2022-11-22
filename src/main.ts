@@ -31,7 +31,7 @@ async function bootstrap() {
 
   app.register(container);
   app.listen({
-    port: Number(process.env.PORT),
+    port: config.PORT,
     host: '0.0.0.0',
   });
 }

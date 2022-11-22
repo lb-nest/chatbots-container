@@ -61,6 +61,7 @@ interface NodeBase<T extends NodeType> {
 
 enum TriggerType {
   NewChat = 'NewChat',
+  Webhook = 'Webhook',
 }
 
 interface Start extends NodeBase<NodeType.Start> {
@@ -127,15 +128,11 @@ interface Branch extends NodeBase<NodeType.Branch> {
   default?: string;
 }
 
-interface Request {
+interface ServiceCall extends NodeBase<NodeType.ServiceCall> {
   url: string;
   headers: Record<string, string>;
   body?: any;
-}
-
-interface ServiceCall extends NodeBase<NodeType.ServiceCall> {
-  request: Request;
-  response: Record<number, any>;
+  variable?: string;
   next?: string;
   error?: string;
 }
@@ -146,7 +143,7 @@ interface Transfer extends NodeBase<NodeType.Transfer> {
 }
 
 interface AssignTag extends NodeBase<NodeType.AssignTag> {
-  tag: number;
+  tagId: number;
   next?: string;
 }
 
@@ -306,9 +303,9 @@ export enum EventType {
   Close = 'Close',
 }
 
-class Chatbot {
+class Chatbot<T extends Session> {
   private schema: Schema;
-  private session: Record<number, Session> = {};
+  private sessions: Record<number, T> = {};
   private io: any;
 
   private handlers: Record<NodeType, Function> = {
@@ -323,7 +320,7 @@ class Chatbot {
     [NodeType.Close]: this.handleClose.bind(this),
   };
 
-  constructor(private config: ConfigByEnvironment) {
+  constructor(private readonly config: ConfigByEnvironment) {
     this.schema = JSON.parse(config.schema);
     this.io = io(config.ws, {
       transports: ['websocket'],
@@ -337,17 +334,21 @@ class Chatbot {
     this.io.on(EventType.Callback, this.handleCallback.bind(this));
   }
 
-  start(): void {}
+  start(): void {
+    console.log(`Chatbot ${this.config.get<number>('id')} started`);
+  }
+
+  // client-server communication
 
   private handleNewChat(chat: Chat): void {
-    if (this.session[chat.id] === undefined) {
+    if (this.sessions[chat.id] === undefined) {
       const node = this.findStart();
 
-      if (!this.check(node.trigger, chat)) {
+      if (!this.checkStart(node.trigger, chat)) {
         return;
       }
 
-      this.session[chat.id] = {
+      this.sessions[chat.id] = <T>{
         chat,
         node,
         variables: this.initializeVariables(),
@@ -355,34 +356,40 @@ class Chatbot {
       };
     }
 
-    const session = this.session[chat.id];
-    session.queue.push(() => this.handlers[session.node?.type]?.(session.chat, session.node));
+    const session = this.sessions[chat.id];
+    session.queue.push(() =>
+      this.handlers[session.node?.type]?.(session.chat, session.node),
+    );
   }
 
   private handleMessage(message: Required<Message>): void {
-    if (this.session[message.chat.id] === undefined) {
+    if (this.sessions[message.chat?.id] === undefined) {
       return;
     }
 
     // TODO: handle message
   }
 
-  private handleCallback(chat: Chat): void {
-    const session = this.session[chat.id];
+  private handleCallback(chat: Pick<Chat, 'id'>): void {
+    const session = this.sessions[chat.id];
     if (session) {
-      session.queue.unshift(() => this.handlers[session.node?.type]?.(session.chat, session.node));
+      session.queue.unshift(() =>
+        this.handlers[session.node?.type]?.(session.chat, session.node),
+      );
     }
   }
 
+  // node implementations
+
   private handleStart(chat: Chat, node: Start): void {
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
+    this.sessions[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.Callback, {
       chatId: chat.id,
     });
   }
 
   private handleSendMessage(chat: Chat, node: SendMessage): void {
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
+    this.sessions[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.SendMessage, {
       chatId: chat.id,
       text: node.text,
@@ -391,11 +398,11 @@ class Chatbot {
   }
 
   private handleCollectInput(chat: Chat, node: CollectInput): void {
-    const session = this.session[chat.id];
+    const session = this.sessions[chat.id];
     if (session.wait) {
       const [{ text }] = chat.messages[0].content;
 
-      if (this.validate(node.validation, text, node)) {
+      if (this.validateInput(node.validation, text, node)) {
         session.variables[node.variable].value = text;
         session.node = this.schema.nodes[<any>node.next];
       }
@@ -413,21 +420,21 @@ class Chatbot {
   }
 
   private handleButtons(chat: Chat, node: Buttons): void {
-    const session = this.session[chat.id];
+    const session = this.sessions[chat.id];
     if (session.wait) {
       const button = node.buttons
         .filter(({ type }) => type === ButtonType.QuickReply)
         .find(({ text }) => text === chat.messages[0].content[0].text);
 
       if (button) {
-        this.session[chat.id].node = this.schema.nodes[<any>button.next];
+        this.sessions[chat.id].node = this.schema.nodes[<any>button.next];
       }
 
       this.io.emit(EventType.Callback, {
         chatId: chat.id,
       });
     } else {
-      this.session[chat.id].wait = true;
+      this.sessions[chat.id].wait = true;
       this.io.emit(EventType.SendMessage, {
         chatId: chat.id,
         text: node.text,
@@ -437,7 +444,7 @@ class Chatbot {
   }
 
   private handleBranch(chat: Chat, node: Branch): void {
-    const session = this.session[chat.id];
+    const session = this.sessions[chat.id];
     const branch = node.branches.find((branch) =>
       ({
         [ComparsionType.All]: (a: boolean[]) => a.every(Boolean),
@@ -460,9 +467,9 @@ class Chatbot {
     );
 
     if (branch) {
-      this.session[chat.id].node = this.schema.nodes[<any>branch.next];
+      this.sessions[chat.id].node = this.schema.nodes[<any>branch.next];
     } else {
-      this.session[chat.id].node = this.schema.nodes[<any>node.default];
+      this.sessions[chat.id].node = this.schema.nodes[<any>node.default];
     }
 
     this.io.emit(EventType.Callback, {
@@ -471,24 +478,28 @@ class Chatbot {
   }
 
   private handleServiceCall(chat: Chat, node: ServiceCall): void {
-    fetch(node.request.url, {
-      headers: Object.assign(
-        {
-          'Content-Type': 'application/json',
-        },
-        node.request.headers,
-      ),
-      body: JSON.stringify(node.request.body),
+    const session = this.sessions[chat.id];
+
+    fetch(node.url, {
+      headers: node.headers,
+      body: JSON.stringify(node.body),
     })
       .then(async (res) => {
         if (!res.ok) {
           throw new Error(await res.text());
         }
 
-        this.session[chat.id].node = this.schema.nodes[<any>node.next];
+        if (node.variable) {
+          session.variables[node.variable] =
+            res.headers['content-type'] === 'application/json'
+              ? await res.json()
+              : await res.text();
+        }
+
+        this.sessions[chat.id].node = this.schema.nodes[<any>node.next];
       })
       .catch(() => {
-        this.session[chat.id].node = this.schema.nodes[<any>node.error];
+        this.sessions[chat.id].node = this.schema.nodes[<any>node.error];
       })
       .finally(() => {
         this.io.emit(EventType.Callback, {
@@ -498,48 +509,66 @@ class Chatbot {
   }
 
   private handleTransfer(chat: Chat, node: Transfer): void {
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
+    this.sessions[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.Transfer, {
       chatId: chat.id,
+      id: chat.contact.id,
       assignedTo: node.assignedTo,
     });
   }
 
   private handleAssignTag(chat: Chat, node: AssignTag): void {
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
+    this.sessions[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.AssignTag, {
       chatId: chat.id,
-      tag: node.tag,
+      id: chat.contact.id,
+      tagId: node.tagId,
     });
   }
 
   private handleClose(chat: Chat, node: Close): void {
-    this.session[chat.id].node = this.schema.nodes[<any>node.next];
+    this.sessions[chat.id].node = this.schema.nodes[<any>node.next];
     this.io.emit(EventType.Close, {
       chatId: chat.id,
+      id: chat.contact.id,
     });
   }
 
+  // helpers
+
   private findStart(): Start {
-    return <Start>Object.values(this.schema.nodes).find(({ type }) => type === NodeType.Start);
+    return <Start>(
+      Object.values(this.schema.nodes).find(
+        ({ type }) => type === NodeType.Start,
+      )
+    );
   }
 
   private initializeVariables(): Record<string, Variable> {
-    return Object.fromEntries(this.schema.variables.map((variable) => [variable.id, variable]));
+    return Object.fromEntries(
+      this.schema.variables.map((variable) => [variable.name, variable]),
+    );
   }
 
-  private check(trigger: TriggerType, chat: Chat): boolean {
+  private checkStart(trigger: TriggerType, chat: Chat): boolean {
     switch (trigger) {
       case TriggerType.NewChat:
         return chat.isNew;
 
+      case TriggerType.Webhook:
+        return true;
+
       default:
-        throw new Error();
+        throw new Error('unknown trigger');
     }
   }
 
-  private validate(validation: ValidationType, text: any, options?: ValidationOptions): boolean {
-    switch (validation) {
+  private validateInput(
+    type: ValidationType,
+    text: any,
+    opts?: ValidationOptions,
+  ): boolean {
+    switch (type) {
       case ValidationType.Boolean:
         return typeof text === 'boolean';
 
@@ -553,7 +582,9 @@ class Chatbot {
         return true;
 
       case ValidationType.RegExp:
-        return typeof options?.regexp === 'string' && new RegExp(options?.regexp).test(text);
+        return (
+          typeof opts?.regexp === 'string' && new RegExp(opts.regexp).test(text)
+        );
 
       case ValidationType.String:
         return typeof text === 'string';

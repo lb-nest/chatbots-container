@@ -6,15 +6,11 @@ export enum VariableType {
 
 export class Variable {
   @IsString()
-  id: string;
+  name: string;
 
   @IsEnum(VariableType)
   type: VariableType;
 
-  @IsString()
-  name: string;
-
   @IsOptional()
-  // TODO: conditional validation
   value?: any;
 }

@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { cleanEnv, port, str } from 'envalid';
+import { cleanEnv, str, url } from 'envalid';
 
 dotenv.config();
 
@@ -8,10 +8,9 @@ export const config = cleanEnv(process.env, {
     choices: ['development', 'staging', 'test', 'production'],
     default: 'development',
   }),
-  PORT: port({
-    default: 8080,
-  }),
+  CONTAINER_ID: str(),
   SECRET: str(),
+  CHATBOTS_URL: url(),
 });
 
 export type Config = typeof config;

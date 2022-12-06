@@ -10,6 +10,10 @@ Dockerfile
 /dist
 /node_modules
 
+/runtime/*
+!/runtime/*.ts
+!/runtime/tsconfig.json
+
 .env
 
 .prettierrc

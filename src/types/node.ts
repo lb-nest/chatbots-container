@@ -45,6 +45,7 @@ export class Start extends NodeBase<NodeType.Start> {
   @IsString()
   next?: string;
 }
+
 export class SendMessage extends NodeBase<NodeType.SendMessage> {
   @IsString()
   text: string;
@@ -65,7 +66,7 @@ export enum ValidationType {
   Boolean = 'Boolean',
   Email = 'Email',
   Phone = 'Phone',
-  Regex = 'Regex',
+  RegExp = 'RegExp',
 }
 
 export class CollectInput extends NodeBase<NodeType.CollectInput> {
@@ -77,6 +78,12 @@ export class CollectInput extends NodeBase<NodeType.CollectInput> {
 
   @IsEnum(ValidationType)
   validation: ValidationType;
+
+  @ValidateIf(
+    (object: CollectInput) => object.validation === ValidationType.RegExp,
+  )
+  @IsString()
+  regexp?: string;
 
   @IsOptional()
   @IsString()
@@ -100,6 +107,9 @@ export enum OperatorType {
   Lte = 'Lte',
   Gt = 'Gt',
   Gte = 'Gte',
+  Includes = 'Includes',
+  StartsWith = 'StartsWith',
+  EndsWith = 'EndsWith',
 }
 
 export class Condition {
@@ -151,7 +161,7 @@ export class ServiceCall extends NodeBase<NodeType.ServiceCall> {
   headers: Record<string, string>;
 
   @IsOptional()
-  body?: any;
+  data?: any;
 
   @IsOptional()
   @IsString()
@@ -178,7 +188,7 @@ export class Transfer extends NodeBase<NodeType.Transfer> {
 
 export class AssignTag extends NodeBase<NodeType.AssignTag> {
   @IsInt()
-  tag: number;
+  tagId: number;
 
   @IsOptional()
   @IsString()

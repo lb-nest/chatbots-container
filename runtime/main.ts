@@ -1,21 +1,8 @@
-// @ts-ignore
-import io from 'https://cdn.socket.io/4.4.1/socket.io.esm.min.js';
+import axios from 'axios';
+import { cleanEnv, json, num, str, url } from 'envalid';
+import { io, Socket } from 'socket.io-client';
 
-declare const Deno: Record<string, any>;
-
-class ConfigByEnvironment {
-  [key: string]: any;
-
-  get<T = any>(key: string): T {
-    return this[key];
-  }
-
-  constructor() {
-    Object.assign(this, Deno.env.toObject());
-  }
-}
-
-export enum AttachmentType {
+enum AttachmentType {
   Audio = 'Audio',
   Document = 'Document',
   Image = 'Image',
@@ -104,6 +91,9 @@ enum OperatorType {
   Lte = 'Lte',
   Gt = 'Gt',
   Gte = 'Gte',
+  Includes = 'Includes',
+  StartsWith = 'StartsWith',
+  EndsWith = 'EndsWith',
 }
 
 interface Condition {
@@ -131,7 +121,7 @@ interface Branch extends NodeBase<NodeType.Branch> {
 interface ServiceCall extends NodeBase<NodeType.ServiceCall> {
   url: string;
   headers: Record<string, string>;
-  body?: any;
+  data?: any;
   variable?: string;
   next?: string;
   error?: string;
@@ -167,9 +157,8 @@ enum VariableType {
 }
 
 interface Variable {
-  id: string;
-  type: VariableType;
   name: string;
+  type: VariableType;
   value?: any;
 }
 
@@ -305,14 +294,19 @@ export enum EventType {
 
 class Chatbot<T extends Session> {
   private schema: Schema;
+  private id: number;
+  private ws: string;
+  private token: string;
   private sessions: Record<number, T> = {};
-  private io: any;
+  private io: Socket & {
+    emitAsync: (...args: Parameters<Socket['emit']>) => Promise<any>;
+  };
 
   private handlers: Record<NodeType, Function> = {
     [NodeType.Start]: this.handleStart.bind(this),
     [NodeType.SendMessage]: this.handleSendMessage.bind(this),
     [NodeType.CollectInput]: this.handleCollectInput.bind(this),
-    [NodeType.Buttons]: this.handleButtons,
+    [NodeType.Buttons]: this.handleButtons.bind(this),
     [NodeType.Branch]: this.handleBranch.bind(this),
     [NodeType.ServiceCall]: this.handleServiceCall.bind(this),
     [NodeType.Transfer]: this.handleTransfer.bind(this),
@@ -320,14 +314,30 @@ class Chatbot<T extends Session> {
     [NodeType.Close]: this.handleClose.bind(this),
   };
 
-  constructor(private readonly config: ConfigByEnvironment) {
-    this.schema = JSON.parse(config.schema);
-    this.io = io(config.ws, {
-      transports: ['websocket'],
-      auth: {
-        token: config.token,
+  constructor() {
+    Object.assign(
+      this,
+      cleanEnv(process.env, {
+        schema: json(),
+        id: num(),
+        ws: url(),
+        token: str(),
+      }),
+    );
+
+    this.io = Object.assign(
+      io(this.ws, {
+        auth: {
+          token: this.token,
+        },
+      }),
+      {
+        emitAsync: (...args: Parameters<Socket['emit']>): Promise<any> => {
+          this.io.emit(...args);
+          return new Promise((resolve) => this.io.once(args[0], resolve));
+        },
       },
-    });
+    );
 
     this.io.on(EventType.NewChat, this.handleNewChat.bind(this));
     this.io.on(EventType.Message, this.handleMessage.bind(this));
@@ -335,13 +345,13 @@ class Chatbot<T extends Session> {
   }
 
   start(): void {
-    console.log(`Chatbot ${this.config.get<number>('id')} started`);
+    console.log(`Chatbot ${this.id} started`);
   }
 
   // client-server communication
 
-  private handleNewChat(chat: Chat): void {
-    if (this.sessions[chat.id] === undefined) {
+  private async handleNewChat(chat: Chat): Promise<void> {
+    if (!this.sessions[chat.id]) {
       const node = this.findStart();
 
       if (!this.checkStart(node.trigger, chat)) {
@@ -354,16 +364,24 @@ class Chatbot<T extends Session> {
         variables: this.initializeVariables(),
         queue: new Queue(),
       };
+
+      await this.io.emitAsync(EventType.Transfer, {
+        chatId: chat.id,
+        id: chat.contact.id,
+        assignedTo: this.id,
+        type: 'Chatbot',
+      });
     }
 
     const session = this.sessions[chat.id];
+
     session.queue.push(() =>
       this.handlers[session.node?.type]?.(session.chat, session.node),
     );
   }
 
   private handleMessage(message: Required<Message>): void {
-    if (this.sessions[message.chat?.id] === undefined) {
+    if (this.sessions[message.chat?.id]) {
       return;
     }
 
@@ -458,6 +476,12 @@ class Chatbot<T extends Session> {
             [OperatorType.Lt]: (a: any, b: any) => a < b,
             [OperatorType.Lte]: (a: any, b: any) => a <= b,
             [OperatorType.Neq]: (a: any, b: any) => a !== b,
+            [OperatorType.Includes]: (a: any, b: any) =>
+              typeof a === 'string' && a.includes(b),
+            [OperatorType.StartsWith]: (a: any, b: any) =>
+              typeof a === 'string' && a.startsWith(b),
+            [OperatorType.EndsWith]: (a: any, b: any) =>
+              typeof a === 'string' && a.endsWith(b),
           }[condition.operator](
             session.variables[condition.variable1],
             session.variables[condition.variable2],
@@ -480,20 +504,13 @@ class Chatbot<T extends Session> {
   private handleServiceCall(chat: Chat, node: ServiceCall): void {
     const session = this.sessions[chat.id];
 
-    fetch(node.url, {
+    axios(node.url, {
       headers: node.headers,
-      body: JSON.stringify(node.body),
+      data: node.data,
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-
+      .then(({ data }) => {
         if (node.variable) {
-          session.variables[node.variable] =
-            res.headers['content-type'] === 'application/json'
-              ? await res.json()
-              : await res.text();
+          session.variables[node.variable] = data;
         }
 
         this.sessions[chat.id].node = this.schema.nodes[<any>node.next];
@@ -592,5 +609,5 @@ class Chatbot<T extends Session> {
   }
 }
 
-const chatbot = new Chatbot(new ConfigByEnvironment());
+const chatbot = new Chatbot();
 chatbot.start();

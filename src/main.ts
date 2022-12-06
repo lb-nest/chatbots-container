@@ -1,38 +1,68 @@
 import 'reflect-metadata';
 
-import { diContainer, fastifyAwilixPlugin } from '@fastify/awilix';
-import { asClass, asValue, Lifetime } from 'awilix';
-import fastify from 'fastify';
+import { plainToClass } from 'class-transformer';
+import { validate } from 'class-validator';
+import { io } from 'socket.io-client';
 import { config } from './config';
-import { container } from './routes/container';
-import { JwtService, ProcessManager } from './services';
+import { verify } from './jwt';
+import { start, stop } from './pm';
+import { Schema } from './types';
 
 async function bootstrap() {
-  const app = fastify({
-    logger: true,
+  const socket = io(config.CHATBOTS_URL, {
+    auth: {
+      containerId: config.CONTAINER_ID,
+    },
   });
 
-  app.register(fastifyAwilixPlugin, {
-    disposeOnClose: true,
-    disposeOnResponse: true,
+  socket.on('start', async (body, headers: Record<string, any>) => {
+    try {
+      const schema = plainToClass(Schema, body);
+
+      const validationErrors = await validate(schema, {
+        whitelist: true,
+      });
+
+      if (validationErrors.length > 0) {
+        return socket.emit('start', {
+          message: 'schema has validation errors',
+          validationErrors,
+        });
+      }
+
+      const jwt = verify(headers.token);
+      await start(jwt.id, {
+        schema: JSON.stringify(
+          Object.assign(schema, {
+            nodes: Object.fromEntries(
+              schema.nodes.map((node) => [node.id, node]),
+            ),
+          }),
+        ),
+        id: jwt.id,
+        ws: jwt.ws,
+        token: headers.token,
+      });
+
+      return socket.emit('start', {
+        message: 'success',
+      });
+    } catch (e) {
+      return socket.emit('start', e);
+    }
   });
 
-  diContainer.register({
-    config: asValue(config),
-    jwt: asClass(JwtService, {
-      lifetime: Lifetime.SINGLETON,
-      dispose: (module) => module.dispose(),
-    }),
-    pm: asClass(ProcessManager, {
-      lifetime: Lifetime.SINGLETON,
-      dispose: (module) => module.dispose(),
-    }),
-  });
+  socket.on('stop', async (_, headers: Record<string, any>) => {
+    try {
+      const jwt = verify(headers.token);
+      await stop(jwt.id);
 
-  app.register(container);
-  app.listen({
-    port: config.PORT,
-    host: '0.0.0.0',
+      return socket.emit('stop', {
+        message: 'success',
+      });
+    } catch (e) {
+      return socket.emit('stop', e);
+    }
   });
 }
 bootstrap();

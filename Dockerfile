@@ -24,6 +24,6 @@ WORKDIR /usr/src/app
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/node_modules/ ./node_modules/
 COPY --from=builder /usr/src/app/dist/ ./dist/
-COPY --from=builder /usr/src/app/deno-runtime ./deno-runtime/
+COPY --from=builder /usr/src/app/runtime/*.ts ./runtime/
 
 CMD ["node", "dist/main"]

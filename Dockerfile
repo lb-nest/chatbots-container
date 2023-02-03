@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:18-alpine3.16 AS builder
 
 ENV NODE_ENV build
 
@@ -12,10 +12,7 @@ RUN npm run build && npm prune --production
 
 # ---
 
-FROM denoland/deno:bin-1.26.2 AS deno
-FROM node:18
-
-COPY --from=deno /deno /usr/local/bin/deno
+FROM node:18-alpine3.16
 
 ENV NODE_ENV production
 
@@ -24,6 +21,5 @@ WORKDIR /usr/src/app
 COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/node_modules/ ./node_modules/
 COPY --from=builder /usr/src/app/dist/ ./dist/
-COPY --from=builder /usr/src/app/runtime/*.ts ./runtime/
 
 CMD ["node", "dist/main"]

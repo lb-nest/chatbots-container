@@ -143,6 +143,8 @@ export class Chatbot {
       );
 
       session.queue.unshift(() => handle(session.chat, session.node));
+    } else {
+      delete this.sessions[contactId];
     }
   }
 }

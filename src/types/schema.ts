@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import { IsArray, ValidateNested } from 'class-validator';
 import {
+  Assign,
+  AssignTag,
   Branch,
   Buttons,
   Close,
@@ -11,7 +13,6 @@ import {
   SendMessage,
   ServiceCall,
   Start,
-  Transfer,
 } from './node';
 import { Variable } from './variable';
 
@@ -26,18 +27,19 @@ export class Schema {
         { name: NodeType.Buttons, value: Buttons },
         { name: NodeType.Branch, value: Branch },
         { name: NodeType.ServiceCall, value: ServiceCall },
-        { name: NodeType.Transfer, value: Transfer },
+        { name: NodeType.Assign, value: Assign },
+        { name: NodeType.AssignTag, value: AssignTag },
         { name: NodeType.Close, value: Close },
       ],
     },
     keepDiscriminatorProperty: true,
   })
-  @ValidateNested({ each: true })
   @IsArray()
+  @ValidateNested({ each: true })
   nodes: Node[];
 
   @Type(() => Variable)
-  @ValidateNested({ each: true })
   @IsArray()
+  @ValidateNested({ each: true })
   variables: Variable[];
 }
